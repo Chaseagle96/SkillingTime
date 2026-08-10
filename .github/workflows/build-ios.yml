@@ -1,0 +1,182 @@
+name: Build Skilling Time iPhoneOS IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches: [ main ]
+
+permissions:
+  contents: read
+
+jobs:
+  build:
+    name: Build and validate Live Activity IPA
+    runs-on: macos-26
+    timeout-minutes: 35
+
+    env:
+      IPA_NAME: SkillingTime-v0.3.1-LiveActivity.ipa
+
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Inspect Apple build environment
+        run: |
+          set -euxo pipefail
+          sw_vers
+          uname -m
+          xcode-select -p
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun --sdk iphoneos --show-sdk-path
+          xcrun --sdk iphoneos --show-sdk-version
+          printf '\nInstalled Xcode applications:\n'
+          ls -d /Applications/Xcode*.app 2>/dev/null | sort || true
+
+      - name: Validate Xcode project and scheme
+        run: |
+          set -euxo pipefail
+          test -f SkillingTime.xcodeproj/project.pbxproj
+          test -f SkillingTime.xcodeproj/xcshareddata/xcschemes/SkillingTime.xcscheme
+          xcodebuild -project SkillingTime.xcodeproj -list
+          xcodebuild \
+            -project SkillingTime.xcodeproj \
+            -scheme SkillingTime \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -showBuildSettings | tee "$RUNNER_TEMP/build-settings.txt"
+
+      - name: Build app and WidgetKit extension without distribution signing
+        run: |
+          set -euxo pipefail
+          DERIVED_DATA="$RUNNER_TEMP/SkillingTimeDerivedData"
+          xcodebuild \
+            -project SkillingTime.xcodeproj \
+            -scheme SkillingTime \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build | tee "$RUNNER_TEMP/xcodebuild.log"
+
+          APP="$DERIVED_DATA/Build/Products/Release-iphoneos/SkillingTime.app"
+          EXT="$APP/PlugIns/SkillingTimeWidgets.appex"
+          MAIN_EXEC="$APP/SkillingTime"
+          EXT_EXEC="$EXT/SkillingTimeWidgets"
+
+          test -d "$APP" || { echo 'ERROR: SkillingTime.app was not produced'; exit 1; }
+          test -d "$EXT" || { echo 'ERROR: SkillingTimeWidgets.appex is missing'; find "$APP" -maxdepth 4 -print; exit 1; }
+          test -x "$MAIN_EXEC" || { echo 'ERROR: main executable is missing'; exit 1; }
+          test -x "$EXT_EXEC" || { echo 'ERROR: widget executable is missing'; exit 1; }
+
+          plutil -lint "$APP/Info.plist"
+          plutil -lint "$EXT/Info.plist"
+
+          LIVE_VALUE=$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist")
+          test "$LIVE_VALUE" = "true" || { echo "ERROR: NSSupportsLiveActivities is not true: $LIVE_VALUE"; exit 1; }
+
+          EXT_POINT=$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist")
+          test "$EXT_POINT" = "com.apple.widgetkit-extension" || { echo "ERROR: unexpected extension point: $EXT_POINT"; exit 1; }
+
+          MAIN_FILE=$(file "$MAIN_EXEC")
+          EXT_FILE=$(file "$EXT_EXEC")
+          echo "$MAIN_FILE"
+          echo "$EXT_FILE"
+          echo "$MAIN_FILE" | grep -q 'Mach-O' || { echo 'ERROR: main executable is not Mach-O'; exit 1; }
+          echo "$EXT_FILE" | grep -q 'Mach-O' || { echo 'ERROR: widget executable is not Mach-O'; exit 1; }
+
+          MAIN_ARCHS=$(lipo -archs "$MAIN_EXEC")
+          EXT_ARCHS=$(lipo -archs "$EXT_EXEC")
+          echo "Main architectures: $MAIN_ARCHS"
+          echo "Widget architectures: $EXT_ARCHS"
+          echo "$MAIN_ARCHS" | grep -qw arm64 || { echo 'ERROR: main executable lacks arm64'; exit 1; }
+          echo "$EXT_ARCHS" | grep -qw arm64 || { echo 'ERROR: widget executable lacks arm64'; exit 1; }
+
+          otool -hv "$MAIN_EXEC"
+          otool -hv "$EXT_EXEC"
+
+          {
+            echo "App: $APP"
+            echo "Extension: $EXT"
+            echo "NSSupportsLiveActivities: $LIVE_VALUE"
+            echo "NSExtensionPointIdentifier: $EXT_POINT"
+            echo "Main executable: $MAIN_FILE"
+            echo "Widget executable: $EXT_FILE"
+            echo "Main architectures: $MAIN_ARCHS"
+            echo "Widget architectures: $EXT_ARCHS"
+          } | tee "$RUNNER_TEMP/bundle-validation.txt"
+
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
+
+      - name: Package standard unsigned IPA
+        run: |
+          set -euxo pipefail
+          PACKAGE="$RUNNER_TEMP/package"
+          rm -rf "$PACKAGE"
+          mkdir -p "$PACKAGE/Payload"
+          ditto "$APP_PATH" "$PACKAGE/Payload/SkillingTime.app"
+          cd "$PACKAGE"
+          /usr/bin/zip -qry "$GITHUB_WORKSPACE/$IPA_NAME" Payload
+
+      - name: Validate final IPA archive
+        run: |
+          set -euxo pipefail
+          unzip -t "$IPA_NAME"
+          unzip -l "$IPA_NAME" | tee "$RUNNER_TEMP/ipa-contents.txt"
+
+          grep -Fq 'Payload/SkillingTime.app/' "$RUNNER_TEMP/ipa-contents.txt" || {
+            echo 'ERROR: IPA does not contain Payload/SkillingTime.app'; exit 1;
+          }
+          grep -Fq 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/' "$RUNNER_TEMP/ipa-contents.txt" || {
+            echo 'ERROR: IPA does not contain Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/'; exit 1;
+          }
+          grep -Fq 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/SkillingTimeWidgets' "$RUNNER_TEMP/ipa-contents.txt" || {
+            echo 'ERROR: IPA does not contain the WidgetKit extension executable'; exit 1;
+          }
+
+          rm -rf "$RUNNER_TEMP/ipa-inspect"
+          mkdir -p "$RUNNER_TEMP/ipa-inspect"
+          unzip -q "$IPA_NAME" -d "$RUNNER_TEMP/ipa-inspect"
+          IPA_APP="$RUNNER_TEMP/ipa-inspect/Payload/SkillingTime.app"
+          IPA_EXT="$IPA_APP/PlugIns/SkillingTimeWidgets.appex"
+
+          plutil -lint "$IPA_APP/Info.plist"
+          plutil -lint "$IPA_EXT/Info.plist"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$IPA_APP/Info.plist")" = "true"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$IPA_EXT/Info.plist")" = "com.apple.widgetkit-extension"
+          file "$IPA_APP/SkillingTime" | grep -q 'Mach-O'
+          file "$IPA_EXT/SkillingTimeWidgets" | grep -q 'Mach-O'
+          lipo -archs "$IPA_APP/SkillingTime" | grep -qw arm64
+          lipo -archs "$IPA_EXT/SkillingTimeWidgets" | grep -qw arm64
+
+          shasum -a 256 "$IPA_NAME" | tee "$IPA_NAME.sha256"
+          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.3.1-LiveActivity-validation.txt
+
+      - name: Upload validated IPA artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkillingTime-v0.3.1-LiveActivity
+          path: |
+            SkillingTime-v0.3.1-LiveActivity.ipa
+            SkillingTime-v0.3.1-LiveActivity.ipa.sha256
+            SkillingTime-v0.3.1-LiveActivity-validation.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Upload build diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkillingTime-build-diagnostics
+          path: |
+            ${{ runner.temp }}/xcodebuild.log
+            ${{ runner.temp }}/build-settings.txt
+            ${{ runner.temp }}/bundle-validation.txt
+            ${{ runner.temp }}/ipa-contents.txt
+          if-no-files-found: ignore
+          retention-days: 7
