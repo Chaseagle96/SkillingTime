@@ -36,6 +36,8 @@
 		30000000000000000000001B /* LiveActivityCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001C /* LiveActivityCoordinator.swift */; };
 		30000000000000000000001C /* ProgressionNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* ProgressionNotificationManager.swift */; };
 		30000000000000000000001D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000022 /* PrivacyInfo.xcprivacy */; };
+		30000000000000000000001E /* ActivityDayLedgerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000023 /* ActivityDayLedgerService.swift */; };
+		30000000000000000000001F /* PersonalRecordEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000024 /* PersonalRecordEngine.swift */; };
 		310000000000000000000001 /* SkillingTimeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000001 /* SkillingTimeWidgetBundle.swift */; };
 		310000000000000000000002 /* SkillingTimeLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000002 /* SkillingTimeLiveActivityWidget.swift */; };
 		310000000000000000000003 /* SessionSharedStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* SessionSharedStorage.swift */; };
@@ -110,6 +112,8 @@
 		20000000000000000000001E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
 		20000000000000000000001F /* SkillingTime.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SkillingTime.entitlements; sourceTree = "<group>"; };
 		200000000000000000000022 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		200000000000000000000023 /* ActivityDayLedgerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActivityDayLedgerService.swift; sourceTree = "<group>"; };
+		200000000000000000000024 /* PersonalRecordEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = PersonalRecordEngine.swift; sourceTree = "<group>"; };
 		210000000000000000000001 /* SkillingTimeWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeWidgetBundle.swift; sourceTree = "<group>"; };
 		210000000000000000000002 /* SkillingTimeLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeLiveActivityWidget.swift; sourceTree = "<group>"; };
 		210000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
@@ -204,6 +208,8 @@
 				200000000000000000000016 /* RewardResolver.swift */,
 				200000000000000000000017 /* SessionCommitService.swift */,
 				200000000000000000000018 /* SkillLedgerService.swift */,
+				200000000000000000000023 /* ActivityDayLedgerService.swift */,
+				200000000000000000000024 /* PersonalRecordEngine.swift */,
 				20000000000000000000001C /* LiveActivityCoordinator.swift */,
 				20000000000000000000001D /* ProgressionNotificationManager.swift */,
 			);
@@ -418,6 +424,8 @@
 				300000000000000000000016 /* SessionCommitService.swift in Sources */,
 				300000000000000000000017 /* SkillLedgerService.swift in Sources */,
 				300000000000000000000018 /* SessionSharedStorage.swift in Sources */,
+				30000000000000000000001E /* ActivityDayLedgerService.swift in Sources */,
+				30000000000000000000001F /* PersonalRecordEngine.swift in Sources */,
 				300000000000000000000019 /* SkillingTimeActivityAttributes.swift in Sources */,
 				30000000000000000000001A /* SkillingTimeLiveActivityIntents.swift in Sources */,
 				30000000000000000000001B /* LiveActivityCoordinator.swift in Sources */,
@@ -584,7 +592,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = SkillingTime/SkillingTime.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -598,7 +606,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -615,7 +623,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = SkillingTime/SkillingTime.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -629,7 +637,7 @@
 					"$(inherited)",
 					"@executable_path/Frameworks",
 				);
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -644,10 +652,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -663,10 +671,10 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.tests;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
@@ -683,7 +691,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = SkillingTimeWidgets/SkillingTimeWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SkillingTimeWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -692,7 +700,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.SkillingTimeWidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
@@ -709,7 +717,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = SkillingTimeWidgets/SkillingTimeWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 4;
+				CURRENT_PROJECT_VERSION = 5;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SkillingTimeWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -718,7 +726,7 @@
 					"@executable_path/Frameworks",
 					"@executable_path/../../Frameworks",
 				);
-				MARKETING_VERSION = 0.3.1;
+				MARKETING_VERSION = 0.4.0;
 				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.SkillingTimeWidgets;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SKIP_INSTALL = YES;
