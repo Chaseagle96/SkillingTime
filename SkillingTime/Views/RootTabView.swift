@@ -9,6 +9,8 @@ struct RootTabView: View {
     @EnvironmentObject private var notificationManager: ProgressionNotificationManager
     @Query(sort: \LifeSkill.sortOrder) private var skills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
+    @Query(sort: \QuestAssignment.periodStart, order: .reverse)
+    private var questAssignments: [QuestAssignment]
 
     @State private var selectedTab = 0
     @State private var showingActiveSession = false
@@ -23,6 +25,24 @@ struct RootTabView: View {
     private var activeBaseSeconds: Int {
         guard let skillID = sessionController.activeSession?.skillID else { return 0 }
         return ledgers.first { $0.skillID == skillID }?.totalActiveSeconds ?? 0
+    }
+
+    private var activeQuestAssignment: QuestAssignment? {
+        guard let skillID = sessionController.activeSession?.skillID else { return nil }
+        return questAssignments
+            .filter {
+                QuestEngine.isCurrent($0)
+                    && $0.completedAt == nil
+                    && ($0.targetSkillID == nil || $0.targetSkillID == skillID)
+                    && isLiveQuest($0)
+            }
+            .sorted {
+                let lhsPriority = questLivePriority($0)
+                let rhsPriority = questLivePriority($1)
+                if lhsPriority != rhsPriority { return lhsPriority < rhsPriority }
+                return $0.slot < $1.slot
+            }
+            .first
     }
 
     var body: some View {
@@ -67,6 +87,16 @@ struct RootTabView: View {
             } catch {
                 preparationFailures.append("Progress ledger: \(error.localizedDescription)")
             }
+            do {
+                try ActivityDayLedgerService.rebuildIfNeeded(in: modelContext)
+            } catch {
+                preparationFailures.append("Daily activity ledger: \(error.localizedDescription)")
+            }
+            do {
+                _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
+            } catch {
+                preparationFailures.append("Questboard: \(error.localizedDescription)")
+            }
             if !preparationFailures.isEmpty {
                 persistenceError = "Skilling Time could not fully prepare its persistent history. "
                     + preparationFailures.joined(separator: " ")
@@ -85,12 +115,20 @@ struct RootTabView: View {
         .onChange(of: skillFingerprints) { _, _ in
             synchronizeAmbientSessionSoon()
         }
+        .onChange(of: questFingerprints) { _, _ in
+            synchronizeAmbientSessionSoon()
+        }
         .onChange(of: notificationManager.alertsEnabled) { _, _ in
             synchronizeAmbientSessionSoon()
         }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             sessionController.refreshFromSharedStorage()
+            do {
+                _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
+            } catch {
+                persistenceError = "The Questboard could not refresh. \(error.localizedDescription)"
+            }
             synchronizeAmbientSessionSoon()
         }
         .onChange(of: sessionController.storageErrorMessage) { _, message in
@@ -120,15 +158,15 @@ struct RootTabView: View {
     private var tabView: some View {
         TabView(selection: $selectedTab) {
             NavigationStack {
-                SkillbookView()
+                TodayView()
             }
-            .tabItem { Label("Skills", systemImage: "square.grid.2x2.fill") }
+            .tabItem { Label("Today", systemImage: "sun.max.fill") }
             .tag(0)
 
             NavigationStack {
-                QuestListView()
+                SkillbookView()
             }
-            .tabItem { Label("Quests", systemImage: "map.fill") }
+            .tabItem { Label("Skills", systemImage: "square.grid.2x2.fill") }
             .tag(1)
 
             NavigationStack {
@@ -230,6 +268,19 @@ struct RootTabView: View {
         }
     }
 
+    private var questFingerprints: [QuestFingerprint] {
+        questAssignments.map {
+            QuestFingerprint(
+                id: $0.id,
+                currentValue: $0.currentValue,
+                targetValue: $0.targetValue,
+                completedAt: $0.completedAt,
+                retiredAt: $0.retiredAt
+            )
+        }
+        .sorted { $0.id < $1.id }
+    }
+
     private func openActiveSession(skillID: UUID) {
         presentedSkillID = skillID
         showingActiveSession = true
@@ -264,13 +315,34 @@ struct RootTabView: View {
         await liveActivityCoordinator.synchronize(
             snapshot: snapshot,
             skill: skill,
-            baseTotalSeconds: baseSeconds
+            baseTotalSeconds: baseSeconds,
+            questAssignment: activeQuestAssignment
         )
         await notificationManager.synchronize(
             snapshot: snapshot,
             skill: skill,
             baseTotalSeconds: baseSeconds
         )
+    }
+
+    private func questLivePriority(_ assignment: QuestAssignment) -> Int {
+        switch assignment.kind {
+        case .some(.focusGoal): 0
+        case .some(.deepSession): 1
+        case .some(.activeTime): 2
+        case .some(.journeymanXP): 3
+        default: 10
+        }
+    }
+
+    private func isLiveQuest(_ assignment: QuestAssignment) -> Bool {
+        guard let kind = assignment.kind else { return false }
+        return [
+            QuestKind.focusGoal,
+            .deepSession,
+            .activeTime,
+            .journeymanXP
+        ].contains(kind)
     }
 
     private func seedBuiltInSkillsIfNeeded() throws {
@@ -307,6 +379,14 @@ private struct SkillFingerprint: Equatable {
     let symbolName: String
     let accentHex: String
     let curveVersion: Int
+}
+
+private struct QuestFingerprint: Equatable {
+    let id: String
+    let currentValue: Int
+    let targetValue: Int
+    let completedAt: Date?
+    let retiredAt: Date?
 }
 
 private struct MiniSessionBar: View {
