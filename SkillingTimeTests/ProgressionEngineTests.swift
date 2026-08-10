@@ -592,7 +592,13 @@ final class SessionCommitServiceTests: XCTestCase {
             SkillSpecialization.self,
             QuestAssignment.self,
             ActivityDayLedger.self,
-            PersonalRecordEvent.self
+            PersonalRecordEvent.self,
+            SkillPathAssignment.self,
+            CharacterPathLedger.self,
+            CharacterProfile.self,
+            CharacterTitleUnlock.self,
+            ExpertChallenge.self,
+            SkillLegacy.self
         ])
         let configuration = ModelConfiguration(
             schema: schema,
@@ -614,7 +620,13 @@ final class SkillLedgerServiceTests: XCTestCase {
             SkillSpecialization.self,
             QuestAssignment.self,
             ActivityDayLedger.self,
-            PersonalRecordEvent.self
+            PersonalRecordEvent.self,
+            SkillPathAssignment.self,
+            CharacterPathLedger.self,
+            CharacterProfile.self,
+            CharacterTitleUnlock.self,
+            ExpertChallenge.self,
+            SkillLegacy.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
@@ -898,14 +910,232 @@ final class QuestboardV4Tests: XCTestCase {
             SkillSpecialization.self,
             QuestAssignment.self,
             ActivityDayLedger.self,
-            PersonalRecordEvent.self
+            PersonalRecordEvent.self,
+            SkillPathAssignment.self,
+            CharacterPathLedger.self,
+            CharacterProfile.self,
+            CharacterTitleUnlock.self,
+            ExpertChallenge.self,
+            SkillLegacy.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         return try ModelContainer(for: schema, configurations: [configuration])
     }
 }
 
-final class SchemaMigrationV4Tests: XCTestCase {
+final class CharacterProgressionV5Tests: XCTestCase {
+    @MainActor
+    func testEffectiveDatedAssignmentsPreserveEarlierPathHistory() {
+        let skillID = UUID()
+        let insight = SkillPathAssignment(
+            id: "insight",
+            skillID: skillID,
+            pathRawValue: CharacterPath.insight.rawValue,
+            effectiveFrom: Date(timeIntervalSince1970: 100),
+            isConfirmed: true
+        )
+        let craft = SkillPathAssignment(
+            id: "craft",
+            skillID: skillID,
+            pathRawValue: CharacterPath.craft.rawValue,
+            effectiveFrom: Date(timeIntervalSince1970: 300),
+            isConfirmed: true
+        )
+        let first = SkillSession(
+            skillID: skillID,
+            startedAt: Date(timeIntervalSince1970: 140),
+            endedAt: Date(timeIntervalSince1970: 200),
+            activeSeconds: 60
+        )
+        let second = SkillSession(
+            skillID: skillID,
+            startedAt: Date(timeIntervalSince1970: 340),
+            endedAt: Date(timeIntervalSince1970: 400),
+            activeSeconds: 60
+        )
+
+        let totals = CharacterProgressionEngine.totals(
+            sessions: [first, second],
+            assignments: [insight, craft]
+        )
+
+        XCTAssertEqual(totals[.insight], 60)
+        XCTAssertEqual(totals[.craft], 60)
+    }
+
+    @MainActor
+    func testPathTitleRemainsEarnedAfterHistoryCorrection() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let skill = LifeSkill(
+            name: "Reading",
+            symbolName: "book",
+            accentHex: "FFFFFF",
+            category: "Learning",
+            createdAt: Date(timeIntervalSince1970: 100)
+        )
+        context.insert(skill)
+        CharacterProgressionService.recordInitialAssignment(
+            skill: skill,
+            path: .insight,
+            in: context
+        )
+        let requiredSeconds = ProgressionEngine.cumulativeXP(
+            toReach: 25,
+            curveVersion: 1
+        ) * ProgressionEngine.secondsPerXP(curveVersion: 1)
+        let session = SkillSession(
+            skillID: skill.id,
+            startedAt: Date(timeIntervalSince1970: 200),
+            endedAt: Date(timeIntervalSince1970: 200 + Double(requiredSeconds)),
+            activeSeconds: requiredSeconds
+        )
+        context.insert(session)
+
+        _ = try CharacterProgressionService.reconcile(
+            skills: [skill],
+            beforeSessions: [],
+            afterSessions: [session],
+            triggeringSession: session,
+            in: context,
+            now: session.endedAt
+        )
+        try context.save()
+        XCTAssertTrue(
+            try context.fetch(FetchDescriptor<CharacterTitleUnlock>())
+                .contains { $0.id == "path-title|insight|25" }
+        )
+
+        _ = try CharacterProgressionService.reconcile(
+            skills: [skill],
+            beforeSessions: [session],
+            afterSessions: [],
+            triggeringSession: nil,
+            in: context,
+            now: session.endedAt.addingTimeInterval(1)
+        )
+        try context.save()
+
+        XCTAssertTrue(
+            try context.fetch(FetchDescriptor<CharacterTitleUnlock>())
+                .contains { $0.id == "path-title|insight|25" }
+        )
+        XCTAssertEqual(
+            try context.fetch(FetchDescriptor<CharacterPathLedger>())
+                .first { $0.pathRawValue == CharacterPath.insight.rawValue }?
+                .totalActiveSeconds,
+            0
+        )
+    }
+
+    @MainActor
+    func testWeeklyBoardReservesACharacterPathQuest() {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let skill = LifeSkill(
+            name: "Reading",
+            symbolName: "book",
+            accentHex: "FFFFFF",
+            category: "Learning",
+            createdAt: now.addingTimeInterval(-86_400)
+        )
+        let assignment = SkillPathAssignment(
+            id: "reading-path",
+            skillID: skill.id,
+            pathRawValue: CharacterPath.insight.rawValue,
+            effectiveFrom: skill.createdAt,
+            isConfirmed: true
+        )
+        let generated = QuestEngine.makeAssignments(
+            cadence: .weekly,
+            skills: [skill],
+            sessions: [],
+            existingAssignments: [],
+            pathAssignments: [assignment],
+            now: now
+        )
+
+        XCTAssertEqual(generated.count, 2)
+        XCTAssertTrue(generated.contains { $0.templateID == "weekly-long-haul" })
+        XCTAssertTrue(generated.contains { $0.templateID == "weekly-character-path" })
+        XCTAssertEqual(
+            generated.first { $0.templateID == "weekly-character-path" }?.targetPathRawValue,
+            CharacterPath.insight.rawValue
+        )
+    }
+
+    @MainActor
+    func testExpertChallengeCompletionCreatesPermanentTitle() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let skill = LifeSkill(
+            name: "Cooking",
+            symbolName: "frying.pan.fill",
+            accentHex: "FFFFFF",
+            category: "Home"
+        )
+        context.insert(skill)
+        CharacterProgressionService.recordInitialAssignment(
+            skill: skill,
+            path: .craft,
+            in: context
+        )
+        let requiredForExpert = ProgressionEngine.cumulativeXP(
+            toReach: 75,
+            curveVersion: 1
+        ) * ProgressionEngine.secondsPerXP(curveVersion: 1)
+        let historyEnd = Date(timeIntervalSince1970: 1_000_000)
+        let history = SkillSession(
+            skillID: skill.id,
+            startedAt: historyEnd.addingTimeInterval(TimeInterval(-requiredForExpert)),
+            endedAt: historyEnd,
+            activeSeconds: requiredForExpert
+        )
+        context.insert(history)
+        try context.save()
+
+        let challengeStart = historyEnd.addingTimeInterval(1)
+        let challenge = try CharacterProgressionService.startExpertChallenge(
+            skill: skill,
+            kind: .activeTime,
+            in: context,
+            now: challengeStart
+        )
+        let completingSession = SkillSession(
+            skillID: skill.id,
+            startedAt: challengeStart,
+            endedAt: challengeStart.addingTimeInterval(10 * 3_600),
+            activeSeconds: 10 * 3_600
+        )
+        context.insert(completingSession)
+
+        let outcome = try CharacterProgressionService.reconcile(
+            skills: [skill],
+            beforeSessions: [history],
+            afterSessions: [history, completingSession],
+            triggeringSession: completingSession,
+            in: context,
+            now: completingSession.endedAt
+        )
+        try context.save()
+
+        XCTAssertNotNil(challenge.completedAt)
+        XCTAssertEqual(outcome.expertChallengesCompleted.map(\.id), [challenge.id])
+        XCTAssertTrue(outcome.titlesUnlocked.contains { $0.title == "Expert of Cooking" })
+        XCTAssertTrue(
+            try context.fetch(FetchDescriptor<CharacterTitleUnlock>())
+                .contains { $0.id.hasPrefix("expert|") }
+        )
+    }
+
+    @MainActor
+    private func makeContainer() throws -> ModelContainer {
+        let schema = Schema(versionedSchema: SkillingTimeSchemaV5.self)
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+}
+
+final class SchemaMigrationV5Tests: XCTestCase {
     @MainActor
     func testV3StoreMigratesWithoutLosingAuthoritativeHistory() throws {
         let directory = FileManager.default.temporaryDirectory
@@ -955,7 +1185,7 @@ final class SchemaMigrationV4Tests: XCTestCase {
             try oldContext.save()
         }
 
-        let newSchema = Schema(versionedSchema: SkillingTimeSchemaV4.self)
+        let newSchema = Schema(versionedSchema: SkillingTimeSchemaV5.self)
         let newConfiguration = ModelConfiguration(
             "migration-test",
             schema: newSchema,
@@ -979,6 +1209,85 @@ final class SchemaMigrationV4Tests: XCTestCase {
         XCTAssertEqual(session.activeSeconds, 1_800)
         XCTAssertEqual(session.note, "Preserve this")
         XCTAssertNil(session.recordedFocusGoal)
+    }
+
+    @MainActor
+    func testV4StoreMigratesAndCharacterHistoryRebuilds() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SkillingTimeV5Migration-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let storeURL = directory.appendingPathComponent("Store.sqlite")
+        let skillID = UUID()
+        let sessionID = UUID()
+        let endedAt = Date(timeIntervalSince1970: 2_000_000_000)
+
+        do {
+            let oldSchema = Schema(versionedSchema: SkillingTimeSchemaV4.self)
+            let oldConfiguration = ModelConfiguration(
+                "migration-test",
+                schema: oldSchema,
+                url: storeURL
+            )
+            let oldContainer = try ModelContainer(
+                for: oldSchema,
+                configurations: [oldConfiguration]
+            )
+            let oldContext = ModelContext(oldContainer)
+            oldContext.insert(
+                SkillingTimeSchemaV4.LifeSkill(
+                    id: skillID,
+                    name: "Reading",
+                    symbolName: "book",
+                    accentHex: "FFFFFF",
+                    category: "Learning"
+                )
+            )
+            oldContext.insert(
+                SkillingTimeSchemaV4.SkillSession(
+                    id: sessionID,
+                    skillID: skillID,
+                    startedAt: endedAt.addingTimeInterval(-1_800),
+                    endedAt: endedAt,
+                    activeSeconds: 1_800,
+                    note: "Preserve v4 history"
+                )
+            )
+            try oldContext.save()
+        }
+
+        let newSchema = Schema(versionedSchema: SkillingTimeSchemaV5.self)
+        let newConfiguration = ModelConfiguration(
+            "migration-test",
+            schema: newSchema,
+            url: storeURL
+        )
+        let newContainer = try ModelContainer(
+            for: newSchema,
+            migrationPlan: SkillingTimeMigrationPlan.self,
+            configurations: [newConfiguration]
+        )
+        let context = ModelContext(newContainer)
+
+        XCTAssertEqual(
+            try context.fetch(FetchDescriptor<SkillSession>()).first?.note,
+            "Preserve v4 history"
+        )
+        try CharacterProgressionService.prepare(in: context, now: endedAt)
+
+        let assignment = try XCTUnwrap(
+            context.fetch(FetchDescriptor<SkillPathAssignment>()).first
+        )
+        let ledger = try XCTUnwrap(
+            context.fetch(FetchDescriptor<CharacterPathLedger>()).first {
+                $0.pathRawValue == CharacterPath.insight.rawValue
+            }
+        )
+        XCTAssertEqual(assignment.skillID, skillID)
+        XCTAssertEqual(assignment.path, .insight)
+        XCTAssertEqual(ledger.totalActiveSeconds, 1_800)
+        XCTAssertNotNil(context.fetch(FetchDescriptor<CharacterProfile>()).first)
     }
 }
 
