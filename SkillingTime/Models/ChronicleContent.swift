@@ -34,16 +34,16 @@ enum ChronicleContent {
             rank: .expert,
             chapter: "III · Distinctions",
             passage: "You can now see distinctions that were once invisible to you. The work has not become smaller. You have become more capable of meeting it.",
-            unlockTitle: "Expert Illumination",
-            unlockDescription: "The Skill's glyph and rank treatment gain an Expert illumination."
+            unlockTitle: "Expert Challenges",
+            unlockDescription: "Choose a substantial 30-day undertaking and earn a permanent Character title when it is completed."
         ),
         ChronicleEntry(
             level: 100,
             rank: .master,
             chapter: "IV · Mastery",
             passage: "There was never a shortcut hidden from you. Time, repetition, attention, and the decision to return were the secret all along. What began as something you did has become part of who you are.",
-            unlockTitle: "Enduring Mastery",
-            unlockDescription: "Continue beyond Level 100 through an unlimited sequence of Mastery stars."
+            unlockTitle: "Legacy",
+            unlockDescription: "Create a permanent Master title and crest while continuing through unlimited Mastery stars."
         )
     ]
 
