@@ -203,7 +203,7 @@ enum QuestEngine {
 
         return zip(openSlots, available.prefix(openSlots.count)).map { pair in
             let (slot, candidate) = pair
-            makeAssignment(
+            return makeAssignment(
                 candidate: candidate,
                 slot: slot,
                 interval: interval,
