@@ -31,7 +31,9 @@ struct SkillingTimeApp: App {
 
     var body: some Scene {
         WindowGroup {
-            RootTabView()
+            LaunchExperienceContainer {
+                RootTabView()
+            }
                 .environmentObject(sessionController)
                 .environmentObject(liveActivityCoordinator)
                 .environmentObject(notificationManager)

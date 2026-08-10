@@ -38,11 +38,15 @@ struct SkillGlyph: View {
 }
 
 struct SkillProgressBar: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let fraction: Double
     let accent: Color
     var height: CGFloat = 9
 
     var body: some View {
+        let clampedFraction = min(max(fraction, 0), 1)
+
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule()
@@ -55,17 +59,33 @@ struct SkillProgressBar: View {
                             endPoint: .trailing
                         )
                     )
-                    .frame(width: proxy.size.width * CGFloat(min(max(fraction, 0), 1)))
+                    .frame(width: proxy.size.width * CGFloat(clampedFraction))
+                    .overlay(alignment: .trailing) {
+                        Circle()
+                            .fill(Color.white.opacity(0.42))
+                            .frame(width: height * 0.52, height: height * 0.52)
+                            .padding(.trailing, height * 0.24)
+                            .opacity(clampedFraction > 0.02 && clampedFraction < 0.995 ? 1 : 0)
+                    }
             }
         }
         .frame(height: height)
+        .animation(
+            SkillingTimeMotion.animation(
+                SkillingTimeMotion.progress,
+                reduceMotion: reduceMotion
+            ),
+            value: clampedFraction
+        )
         .accessibilityElement(children: .ignore)
         .accessibilityLabel("Progress")
-        .accessibilityValue("\(Int(min(max(fraction, 0), 1) * 100)) percent")
+        .accessibilityValue("\(Int(clampedFraction * 100)) percent")
     }
 }
 
 struct MetricCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let title: String
     let value: String
     let systemImage: String
@@ -79,6 +99,7 @@ struct MetricCard: View {
                 .foregroundStyle(.primary)
                 .lineLimit(1)
                 .minimumScaleFactor(0.72)
+                .contentTransition(.numericText())
             Text(title)
                 .font(.caption)
                 .foregroundStyle(.secondary)
@@ -86,6 +107,13 @@ struct MetricCard: View {
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
         .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .animation(
+            SkillingTimeMotion.animation(
+                SkillingTimeMotion.quick,
+                reduceMotion: reduceMotion
+            ),
+            value: value
+        )
         .accessibilityElement(children: .combine)
     }
 }

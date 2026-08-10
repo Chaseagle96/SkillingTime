@@ -34,21 +34,29 @@ struct CharacterView: View {
         ScrollView {
             VStack(spacing: 20) {
                 characterSheet(totalLevel: totalLevel)
+                    .skillingTimeReveal(order: 0)
 
                 if profile?.pathReviewCompletedAt == nil {
                     pathReviewCard
+                        .skillingTimeReveal(order: 1)
                 }
 
                 pathSection
+                    .skillingTimeReveal(order: 2)
                 overviewGrid(
                     index: index,
                     totalLevel: totalLevel,
                     artifactCount: artifacts.count
                 )
+                .skillingTimeReveal(order: 3)
                 masterySection
+                    .skillingTimeReveal(order: 4)
                 titleSection
+                    .skillingTimeReveal(order: 5)
                 artifactSection(artifacts: artifacts)
+                    .skillingTimeReveal(order: 6)
                 strongestSkills(rankedSkills)
+                    .skillingTimeReveal(order: 7)
             }
             .padding(16)
             .padding(.bottom, 110)
@@ -117,6 +125,7 @@ struct CharacterView: View {
                     Image(systemName: profile?.crestSymbolName ?? "person.fill")
                         .font(.system(size: 38))
                         .foregroundStyle(SkillingTimeTheme.ink.opacity(0.82))
+                        .contentTransition(.symbolEffect(.replace))
                 }
                 .frame(width: 86, height: 86)
 
@@ -181,7 +190,10 @@ struct CharacterView: View {
             )
 
             VStack(spacing: 10) {
-                ForEach(CharacterPath.allCases) { path in
+                ForEach(
+                    Array(CharacterPath.allCases.enumerated()),
+                    id: \.element.id
+                ) { index, path in
                     let ledger = pathLedgers.first { $0.pathRawValue == path.rawValue }
                     let progress = CharacterProgressionEngine.progress(
                         forActiveSeconds: ledger?.totalActiveSeconds ?? 0,
@@ -194,6 +206,7 @@ struct CharacterView: View {
                         totalSeconds: ledger?.totalActiveSeconds ?? 0,
                         skillNames: contributingSkillNames(for: path)
                     )
+                    .skillingTimeReveal(order: index)
                 }
             }
         }
@@ -262,8 +275,11 @@ struct CharacterView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                         }
-                        ProgressView(value: challenge.fractionComplete)
-                            .tint(SkillingTimeTheme.gold)
+                        SkillProgressBar(
+                            fraction: challenge.fractionComplete,
+                            accent: SkillingTimeTheme.gold,
+                            height: 8
+                        )
                         HStack {
                             Text(challenge.progressLabel)
                             Spacer()
@@ -344,6 +360,7 @@ struct CharacterView: View {
                                 Image(systemName: "checkmark.circle.fill")
                                     .foregroundStyle(SkillingTimeTheme.success)
                                     .accessibilityLabel("Equipped")
+                                    .contentTransition(.symbolEffect(.replace))
                             }
                         }
                         .padding(.vertical, 10)
@@ -517,8 +534,11 @@ private struct CharacterPathRow: View {
                     Text("Level \(progress.level)")
                         .font(.subheadline.weight(.semibold))
                 }
-                ProgressView(value: progress.fractionComplete)
-                    .tint(Color(hex: path.accentHex))
+                SkillProgressBar(
+                    fraction: progress.fractionComplete,
+                    accent: Color(hex: path.accentHex),
+                    height: 8
+                )
                 HStack {
                     Text(skillNames)
                         .lineLimit(1)

@@ -101,14 +101,20 @@ struct SkillDetailView: View {
         ScrollView {
             VStack(spacing: 20) {
                 hero
+                    .skillingTimeReveal(order: 0)
                 if skill.isArchived {
                     retiredNotice
+                        .skillingTimeReveal(order: 1)
                 } else {
                     primaryActions
+                        .skillingTimeReveal(order: 1)
                 }
                 statisticsGrid
+                    .skillingTimeReveal(order: 2)
                 masteryProgression
+                    .skillingTimeReveal(order: 3)
                 recentHistory
+                    .skillingTimeReveal(order: 4)
             }
             .padding(.horizontal, 16)
             .padding(.bottom, 110)
@@ -218,6 +224,7 @@ struct SkillDetailView: View {
                     .foregroundStyle(accent)
                 Text("Level \(progress.level)")
                     .font(.system(.largeTitle, design: .rounded, weight: .bold))
+                    .contentTransition(.numericText())
                 HStack(spacing: 6) {
                     Text(progress.displayRank)
                     if skill.isArchived {
@@ -538,6 +545,7 @@ struct SkillDetailView: View {
 
     private func startSession(focusGoal: SessionFocusGoal?) {
         guard sessionController.start(skillID: skill.id, focusGoal: focusGoal) else { return }
+        Haptics.sessionStart()
         showingFocusGoal = false
         showingActiveSession = true
     }

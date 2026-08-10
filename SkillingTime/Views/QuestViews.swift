@@ -21,13 +21,21 @@ struct TodayView: View {
             ScrollView {
                 VStack(spacing: 20) {
                     todayHeader(now: context.date)
+                        .skillingTimeReveal(order: 0)
                     todayMetrics(now: context.date)
+                        .skillingTimeReveal(order: 1)
                     momentumCard(now: context.date)
+                        .skillingTimeReveal(order: 2)
                     focusCard(now: context.date)
+                        .skillingTimeReveal(order: 3)
                     questboard(now: context.date)
+                        .skillingTimeReveal(order: 4)
                     expertChallengeSection(now: context.date)
+                        .skillingTimeReveal(order: 5)
                     continueSkillingCard
+                        .skillingTimeReveal(order: 6)
                     personalBests
+                        .skillingTimeReveal(order: 7)
                 }
                 .padding(16)
                 .padding(.bottom, 110)
@@ -119,6 +127,7 @@ struct TodayView: View {
                             .foregroundStyle(
                                 day.isActive ? SkillingTimeTheme.success : Color.secondary.opacity(0.45)
                             )
+                            .contentTransition(.symbolEffect(.replace))
                     }
                     .frame(maxWidth: .infinity)
                     .accessibilityElement(children: .combine)
@@ -212,7 +221,7 @@ struct TodayView: View {
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SkillingTimePressStyle())
         }
     }
 
@@ -283,8 +292,11 @@ struct TodayView: View {
                                 .font(.caption.weight(.semibold))
                                 .foregroundStyle(.secondary)
                         }
-                        ProgressView(value: challenge.fractionComplete)
-                            .tint(SkillingTimeTheme.gold)
+                        SkillProgressBar(
+                            fraction: challenge.fractionComplete,
+                            accent: SkillingTimeTheme.gold,
+                            height: 8
+                        )
                         HStack {
                             Text(challenge.progressLabel)
                             Spacer()
@@ -339,7 +351,7 @@ struct TodayView: View {
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SkillingTimePressStyle())
         }
     }
 
@@ -452,7 +464,11 @@ private struct MomentumDay: Identifiable {
 }
 
 private struct QuestCard: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     let quest: QuestStatus
+
+    @State private var completionPulse = false
 
     var body: some View {
         VStack(alignment: .leading, spacing: 13) {
@@ -471,6 +487,8 @@ private struct QuestCard: View {
                                 ? SkillingTimeTheme.success
                                 : SkillingTimeTheme.gold
                         )
+                        .contentTransition(.symbolEffect(.replace))
+                        .scaleEffect(completionPulse && !reduceMotion ? 1.16 : 1)
                 }
                 .frame(width: 48, height: 48)
 
@@ -518,5 +536,27 @@ private struct QuestCard: View {
         }
         .accessibilityElement(children: .combine)
         .accessibilityValue(quest.isComplete ? "Complete" : quest.progressLabel)
+        .animation(
+            SkillingTimeMotion.animation(
+                SkillingTimeMotion.responsive,
+                reduceMotion: reduceMotion
+            ),
+            value: quest.isComplete
+        )
+        .onChange(of: quest.isComplete) { wasComplete, isComplete in
+            guard !wasComplete, isComplete else { return }
+            Haptics.questComplete()
+            guard !reduceMotion else { return }
+            withAnimation(SkillingTimeMotion.ceremonial) {
+                completionPulse = true
+            }
+            Task {
+                try? await Task.sleep(nanoseconds: 180_000_000)
+                guard !Task.isCancelled else { return }
+                withAnimation(SkillingTimeMotion.quick) {
+                    completionPulse = false
+                }
+            }
+        }
     }
 }

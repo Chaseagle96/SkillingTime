@@ -1,29 +1,18 @@
-<svg xmlns="http://www.w3.org/2000/svg" width="1024" height="1024" viewBox="0 0 256 256">
+<svg xmlns="http://www.w3.org/2000/svg" width="176" height="176" viewBox="0 0 256 256">
   <defs>
-    <linearGradient id="background" x1="22" y1="12" x2="234" y2="244" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#1A2740"/>
-      <stop offset="0.52" stop-color="#101722"/>
-      <stop offset="1" stop-color="#090C12"/>
-    </linearGradient>
-    <radialGradient id="glow" cx="0" cy="0" r="1" gradientTransform="translate(128 120) rotate(90) scale(117)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#D8B263" stop-opacity="0.20"/>
-      <stop offset="1" stop-color="#D8B263" stop-opacity="0"/>
-    </radialGradient>
     <linearGradient id="gold" x1="48" y1="38" x2="208" y2="218" gradientUnits="userSpaceOnUse">
       <stop offset="0" stop-color="#F0DFC0"/>
       <stop offset="0.48" stop-color="#D8B263"/>
       <stop offset="1" stop-color="#8F7441"/>
     </linearGradient>
     <radialGradient id="sand" cx="0" cy="0" r="1" gradientTransform="translate(128 127) rotate(90) scale(55)" gradientUnits="userSpaceOnUse">
-      <stop stop-color="#F0DFC0" stop-opacity="0.94"/>
+      <stop stop-color="#F0DFC0" stop-opacity="0.92"/>
       <stop offset="1" stop-color="#D8B263" stop-opacity="0.24"/>
     </radialGradient>
   </defs>
 
-  <rect width="256" height="256" fill="url(#background)"/>
-  <rect width="256" height="256" fill="url(#glow)"/>
-  <circle cx="128" cy="128" r="105" fill="none" stroke="url(#gold)" stroke-width="2" stroke-opacity="0.30"/>
-  <circle cx="128" cy="128" r="90" fill="#D8B263" fill-opacity="0.045" stroke="url(#gold)" stroke-width="3"/>
+  <circle cx="128" cy="128" r="105" fill="none" stroke="url(#gold)" stroke-width="2" stroke-opacity="0.26"/>
+  <circle cx="128" cy="128" r="90" fill="#D8B263" fill-opacity="0.035" stroke="url(#gold)" stroke-width="3"/>
 
   <circle cx="128" cy="23" r="5" fill="#C85E5E"/>
   <circle cx="219" cy="75" r="5" fill="#8A72B5"/>
@@ -36,6 +25,7 @@
   <path d="M87 180H169" stroke="url(#gold)" stroke-width="7" stroke-linecap="round"/>
   <path d="M94 82C97 105 111 115 126 128C111 141 97 151 94 174" fill="none" stroke="url(#gold)" stroke-width="6" stroke-linecap="round"/>
   <path d="M162 82C159 105 145 115 130 128C145 141 159 151 162 174" fill="none" stroke="url(#gold)" stroke-width="6" stroke-linecap="round"/>
+
   <path d="M104 91H152L128 119L104 91Z" fill="url(#sand)"/>
   <path d="M128 137L152 165H104L128 137Z" fill="url(#sand)"/>
   <path d="M116 139L128 127L140 139" fill="none" stroke="#F0DFC0" stroke-width="5" stroke-linecap="round" stroke-linejoin="round"/>
