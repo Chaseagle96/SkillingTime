@@ -4,18 +4,20 @@ on:
   workflow_dispatch:
   push:
     branches: [ main ]
+  pull_request:
+    branches: [ main ]
 
 permissions:
   contents: read
 
 jobs:
   build:
-    name: Build and validate Live Activity IPA
+    name: Test, build, and validate Questboard IPA
     runs-on: macos-26
-    timeout-minutes: 35
+    timeout-minutes: 45
 
     env:
-      IPA_NAME: SkillingTime-v0.3.1-LiveActivity.ipa
+      IPA_NAME: SkillingTime-v0.4.0-Questboard.ipa
 
     steps:
       - name: Checkout
@@ -31,8 +33,7 @@ jobs:
           xcodebuild -showsdks
           xcrun --sdk iphoneos --show-sdk-path
           xcrun --sdk iphoneos --show-sdk-version
-          printf '\nInstalled Xcode applications:\n'
-          ls -d /Applications/Xcode*.app 2>/dev/null | sort || true
+          xcrun simctl list devices available
 
       - name: Validate Xcode project and scheme
         run: |
@@ -47,6 +48,46 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -showBuildSettings | tee "$RUNNER_TEMP/build-settings.txt"
+
+      - name: Run progression, Questboard, and migration tests
+        run: |
+          set -euxo pipefail
+          DEVICE_ID=$(python3 - <<'PY'
+          import json
+          import subprocess
+
+          payload = json.loads(
+              subprocess.check_output(
+                  ["xcrun", "simctl", "list", "devices", "available", "--json"],
+                  text=True,
+              )
+          )
+          candidates = []
+          for runtime, devices in payload.get("devices", {}).items():
+              if "iOS" not in runtime:
+                  continue
+              for device in devices:
+                  if device.get("isAvailable") and device.get("name", "").startswith("iPhone"):
+                      candidates.append((runtime, device["name"], device["udid"]))
+          if not candidates:
+              raise SystemExit("No available iPhone simulator was found")
+          candidates.sort(reverse=True)
+          print(candidates[0][2])
+          PY
+          )
+          xcrun simctl boot "$DEVICE_ID" || true
+          xcrun simctl bootstatus "$DEVICE_ID" -b
+          TEST_DERIVED_DATA="$RUNNER_TEMP/SkillingTimeTestDerivedData"
+          xcodebuild \
+            -project SkillingTime.xcodeproj \
+            -scheme SkillingTime \
+            -configuration Debug \
+            -sdk iphonesimulator \
+            -destination "platform=iOS Simulator,id=$DEVICE_ID" \
+            -derivedDataPath "$TEST_DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            test | tee "$RUNNER_TEMP/xcodebuild-tests.log"
 
       - name: Build app and WidgetKit extension without distribution signing
         run: |
@@ -133,7 +174,7 @@ jobs:
             echo 'ERROR: IPA does not contain Payload/SkillingTime.app'; exit 1;
           }
           grep -Fq 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/' "$RUNNER_TEMP/ipa-contents.txt" || {
-            echo 'ERROR: IPA does not contain Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/'; exit 1;
+            echo 'ERROR: IPA does not contain the WidgetKit extension'; exit 1;
           }
           grep -Fq 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/SkillingTimeWidgets' "$RUNNER_TEMP/ipa-contents.txt" || {
             echo 'ERROR: IPA does not contain the WidgetKit extension executable'; exit 1;
@@ -155,16 +196,16 @@ jobs:
           lipo -archs "$IPA_EXT/SkillingTimeWidgets" | grep -qw arm64
 
           shasum -a 256 "$IPA_NAME" | tee "$IPA_NAME.sha256"
-          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.3.1-LiveActivity-validation.txt
+          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.4.0-Questboard-validation.txt
 
       - name: Upload validated IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SkillingTime-v0.3.1-LiveActivity
+          name: SkillingTime-v0.4.0-Questboard
           path: |
-            SkillingTime-v0.3.1-LiveActivity.ipa
-            SkillingTime-v0.3.1-LiveActivity.ipa.sha256
-            SkillingTime-v0.3.1-LiveActivity-validation.txt
+            SkillingTime-v0.4.0-Questboard.ipa
+            SkillingTime-v0.4.0-Questboard.ipa.sha256
+            SkillingTime-v0.4.0-Questboard-validation.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -174,6 +215,7 @@ jobs:
         with:
           name: SkillingTime-build-diagnostics
           path: |
+            ${{ runner.temp }}/xcodebuild-tests.log
             ${{ runner.temp }}/xcodebuild.log
             ${{ runner.temp }}/build-settings.txt
             ${{ runner.temp }}/bundle-validation.txt
