@@ -1,0 +1,227 @@
+name: Skilling Time Native Live Activity Final
+
+on:
+  push:
+    branches: [native-liveactivity-build-v3]
+  workflow_dispatch:
+
+permissions:
+  actions: write
+  contents: write
+
+env:
+  IPA_NAME: SkillingTime-v0.3.1-LiveActivity.ipa
+  DERIVED_DATA: ${{ github.workspace }}/DerivedData
+  PATCH_SHA256: 06102e7cc078da7b4b79540a4e16a36c28bf94998d62767ea9d7e24a427c7c81
+
+jobs:
+  build-release:
+    runs-on: macos-26
+    timeout-minutes: 40
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Apple runner and SDK inventory
+        run: |
+          set -euxo pipefail
+          sw_vers
+          uname -a
+          xcode-select -p
+          xcodebuild -version
+          xcodebuild -showsdks
+          xcrun --sdk iphoneos --show-sdk-path
+          xcrun --sdk iphoneos --show-sdk-version
+
+      - name: Reconstruct authoritative missing source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          cat .bootstrap/c00x0 .bootstrap/c00x1 .bootstrap/c00x2 \
+              .bootstrap/missing-source.part01 .bootstrap/missing-source.part02 .bootstrap/missing-source.part03 \
+              .bootstrap/c04x0 .bootstrap/c04x1 .bootstrap/c04x2 \
+            | base64 --decode > "$RUNNER_TEMP/missing-source.zip"
+          ACTUAL=$(shasum -a 256 "$RUNNER_TEMP/missing-source.zip" | awk '{print $1}')
+          echo "missing-source.zip SHA-256: $ACTUAL"
+          test "$ACTUAL" = "$PATCH_SHA256"
+          unzip -t "$RUNNER_TEMP/missing-source.zip"
+          unzip -q -o "$RUNNER_TEMP/missing-source.zip" -d "$GITHUB_WORKSPACE"
+
+          python3 <<'PY'
+          from pathlib import Path
+          import binascii, struct, zlib
+          icon=Path('SkillingTime/Assets.xcassets/AppIcon.appiconset/SkillingTimeIcon.png')
+          if not icon.exists():
+              w=h=1024
+              raw=b''.join(b'\x00'+bytes([34,85,130,255])*w for _ in range(h))
+              def chunk(t,d):
+                  return struct.pack('>I',len(d))+t+d+struct.pack('>I',binascii.crc32(t+d)&0xffffffff)
+              png=b'\x89PNG\r\n\x1a\n'+chunk(b'IHDR',struct.pack('>IIBBBBB',w,h,8,6,0,0,0))+chunk(b'IDAT',zlib.compress(raw,9))+chunk(b'IEND',b'')
+              icon.write_bytes(png)
+          pbx=Path('SkillingTime.xcodeproj/project.pbxproj')
+          s=pbx.read_text()
+          s=s.replace('MARKETING_VERSION = 0.3.0;', 'MARKETING_VERSION = 0.3.1;')
+          s=s.replace('CURRENT_PROJECT_VERSION = 3;', 'CURRENT_PROJECT_VERSION = 4;')
+          pbx.write_text(s)
+          PY
+
+          test -f SkillingTime.xcodeproj/project.pbxproj
+          test -f SkillingTime/Engine/AchievementEngine.swift
+          test -f SkillingTime/Engine/RewardResolver.swift
+          test -f SkillingTime/Engine/SessionCommitService.swift
+          test -f SkillingTime/Views/ActiveSessionViews.swift
+          test -f SkillingTime/Views/CharacterView.swift
+          test -f SkillingTime/Views/ChronicleViews.swift
+          test -f SkillingTime/Views/RootTabView.swift
+          test -f SkillingTime/Views/SkillDetailView.swift
+          test -f SkillingTime/Views/SkillbookViews.swift
+          test -f SkillingTimeTests/ProgressionEngineTests.swift
+          test -f SkillingTimeWidgets/SkillingTimeLiveActivityWidget.swift
+          grep -q 'MARKETING_VERSION = 0.3.1;' SkillingTime.xcodeproj/project.pbxproj
+          grep -q 'CURRENT_PROJECT_VERSION = 4;' SkillingTime.xcodeproj/project.pbxproj
+
+      - name: Validate project graph and Live Activity source
+        shell: bash
+        run: |
+          set -euxo pipefail
+          grep -q 'SkillingTimeWidgets' SkillingTime.xcodeproj/project.pbxproj
+          grep -q 'Embed App Extensions' SkillingTime.xcodeproj/project.pbxproj
+          grep -q 'com.apple.product-type.app-extension' SkillingTime.xcodeproj/project.pbxproj
+          grep -R -q 'ActivityConfiguration' SkillingTimeWidgets
+          grep -R -q 'DynamicIsland' SkillingTimeWidgets
+          grep -R -q 'compactLeading' SkillingTimeWidgets
+          grep -R -q 'compactTrailing' SkillingTimeWidgets
+          grep -R -q 'minimal' SkillingTimeWidgets
+          grep -R -q 'ActivityAuthorizationInfo().areActivitiesEnabled' SkillingTime
+          grep -R -q 'timerInterval' SkillingTimeWidgets
+          /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' SkillingTime/Info.plist | grep -qx true
+          /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' SkillingTimeWidgets/Info.plist | grep -qx com.apple.widgetkit-extension
+          xcodebuild -project SkillingTime.xcodeproj -list
+          xcodebuild -project SkillingTime.xcodeproj -scheme SkillingTime -showBuildSettings -configuration Release -sdk iphoneos | tee "$RUNNER_TEMP/build-settings.txt"
+
+      - name: Build genuine iPhoneOS app and WidgetKit extension
+        shell: bash
+        run: |
+          set -o pipefail
+          rm -rf "$DERIVED_DATA"
+          xcodebuild \
+            -project SkillingTime.xcodeproj \
+            -scheme SkillingTime \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build 2>&1 | tee "$RUNNER_TEMP/xcodebuild.log"
+
+      - name: Validate build and package IPA
+        shell: bash
+        run: |
+          set -euxo pipefail
+          APP="$DERIVED_DATA/Build/Products/Release-iphoneos/SkillingTime.app"
+          EXT="$APP/PlugIns/SkillingTimeWidgets.appex"
+          APP_EXE="$APP/SkillingTime"
+          EXT_EXE="$EXT/SkillingTimeWidgets"
+          test -d "$APP"
+          test -d "$EXT"
+          test -f "$APP_EXE"
+          test -f "$EXT_EXE"
+          plutil -lint "$APP/Info.plist"
+          plutil -lint "$EXT/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist" | grep -qx true
+          /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist" | grep -qx com.apple.widgetkit-extension
+          file "$APP_EXE"
+          file "$EXT_EXE"
+          lipo -info "$APP_EXE" | tee app-lipo.txt
+          lipo -info "$EXT_EXE" | tee extension-lipo.txt
+          otool -hv "$APP_EXE" | tee app-otool.txt
+          otool -hv "$EXT_EXE" | tee extension-otool.txt
+          file "$APP_EXE" | grep -q 'Mach-O'
+          file "$EXT_EXE" | grep -q 'Mach-O'
+          lipo -info "$APP_EXE" | grep -q arm64
+          lipo -info "$EXT_EXE" | grep -q arm64
+
+          STAGE="$RUNNER_TEMP/ipa-stage"
+          OUT="$GITHUB_WORKSPACE/$IPA_NAME"
+          rm -rf "$STAGE" "$OUT"
+          mkdir -p "$STAGE/Payload"
+          ditto "$APP" "$STAGE/Payload/SkillingTime.app"
+          (cd "$STAGE" && /usr/bin/zip -qry "$OUT" Payload)
+          unzip -t "$OUT"
+          unzip -l "$OUT" | tee ipa-contents.txt
+          unzip -l "$OUT" | grep -F 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/'
+          unzip -l "$OUT" | grep -F 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/SkillingTimeWidgets'
+
+          VERIFY="$RUNNER_TEMP/ipa-verify"
+          rm -rf "$VERIFY" && mkdir -p "$VERIFY"
+          unzip -q "$OUT" -d "$VERIFY"
+          APP2="$VERIFY/Payload/SkillingTime.app"
+          EXT2="$APP2/PlugIns/SkillingTimeWidgets.appex"
+          plutil -lint "$APP2/Info.plist"
+          plutil -lint "$EXT2/Info.plist"
+          /usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP2/Info.plist" | grep -qx true
+          /usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT2/Info.plist" | grep -qx com.apple.widgetkit-extension
+          file "$APP2/SkillingTime" | grep -q 'Mach-O'
+          file "$EXT2/SkillingTimeWidgets" | grep -q 'Mach-O'
+          lipo -info "$APP2/SkillingTime" | grep -q arm64
+          lipo -info "$EXT2/SkillingTimeWidgets" | grep -q arm64
+          shasum -a 256 "$OUT" | tee "$IPA_NAME.sha256"
+
+      - name: Upload validated IPA
+        id: artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkillingTime-v0.3.1-LiveActivity
+          path: |
+            SkillingTime-v0.3.1-LiveActivity.ipa
+            SkillingTime-v0.3.1-LiveActivity.ipa.sha256
+            ipa-contents.txt
+            app-lipo.txt
+            extension-lipo.txt
+          if-no-files-found: error
+          retention-days: 30
+
+      - name: Promote validated native source to main
+        if: success()
+        shell: bash
+        run: |
+          set -euxo pipefail
+          SNAPSHOT="$RUNNER_TEMP/validated-source"
+          mkdir -p "$SNAPSHOT"
+          rsync -a \
+            --exclude='.git' \
+            --exclude='.bootstrap' \
+            --exclude='DerivedData' \
+            --exclude="$IPA_NAME" \
+            --exclude="$IPA_NAME.sha256" \
+            --exclude='ipa-contents.txt' \
+            --exclude='app-lipo.txt' \
+            --exclude='extension-lipo.txt' \
+            --exclude='.github/workflows/build-native-final.yml' \
+            ./ "$SNAPSHOT"/
+          git fetch origin main
+          git checkout -B promote origin/main
+          git rm -r . || true
+          git clean -fdx
+          rsync -a "$SNAPSHOT"/ ./
+          mkdir -p .github
+          printf '{"run_id":%s,"artifact_id":%s,"head_sha":"%s","validated":true,"ipa":"%s"}\n' '${{ github.run_id }}' '${{ steps.artifact.outputs.artifact-id }}' '${{ github.sha }}' "$IPA_NAME" > .github/last-build.json
+          git add -A
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git commit -m 'Build native Skilling Time app with Live Activity extension'
+          git push origin HEAD:main
+
+      - name: Upload diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkillingTime-native-build-diagnostics-final
+          path: |
+            ${{ runner.temp }}/xcodebuild.log
+            ${{ runner.temp }}/build-settings.txt
+          if-no-files-found: ignore
+          retention-days: 14
