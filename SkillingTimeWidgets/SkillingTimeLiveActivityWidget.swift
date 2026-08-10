@@ -33,14 +33,35 @@ struct SkillingTimeLiveActivityWidget: Widget {
 
                 DynamicIslandExpandedRegion(.bottom) {
                     VStack(spacing: 8) {
-                        ProgressView(value: clamped(context.state.progressFraction))
-                            .tint(Color(skillingTimeHex: context.attributes.accentHex))
-                        HStack {
-                            Text("+\(context.state.xpEarned.formatted()) XP")
-                            Spacer()
-                            Text("\(context.state.xpRemaining.formatted()) XP remaining")
+                        if let questTitle = context.state.questTitle {
+                            HStack {
+                                Label(
+                                    context.state.questIsComplete == true
+                                        ? "Quest Complete"
+                                        : questTitle,
+                                    systemImage: context.state.questIsComplete == true
+                                        ? "checkmark.seal.fill"
+                                        : "map.fill"
+                                )
+                                .lineLimit(1)
+                                Spacer()
+                                if let label = context.state.questProgressLabel {
+                                    Text(label)
+                                        .lineLimit(1)
+                                }
+                            }
+                            .font(.caption2)
+                            questProgressView(state: context.state)
+                        } else {
+                            ProgressView(value: clamped(context.state.progressFraction))
+                                .tint(Color(skillingTimeHex: context.attributes.accentHex))
+                            HStack {
+                                Text("+\(context.state.xpEarned.formatted()) XP")
+                                Spacer()
+                                Text("\(context.state.xpRemaining.formatted()) XP remaining")
+                            }
+                            .font(.caption2)
                         }
-                        .font(.caption2)
                         controls(context: context, compact: true)
                     }
                 }
@@ -97,8 +118,30 @@ struct SkillingTimeLiveActivityWidget: Widget {
             ProgressView(value: clamped(context.state.progressFraction))
                 .tint(Color(skillingTimeHex: context.attributes.accentHex))
 
-            if let title = context.state.focusGoalTitle,
-               let label = context.state.focusGoalProgressLabel {
+            if let questTitle = context.state.questTitle {
+                VStack(spacing: 6) {
+                    HStack {
+                        Label(
+                            context.state.questIsComplete == true
+                                ? "Quest Complete"
+                                : questTitle,
+                            systemImage: context.state.questIsComplete == true
+                                ? "checkmark.seal.fill"
+                                : "map.fill"
+                        )
+                        .lineLimit(1)
+                        Spacer()
+                        if let label = context.state.questProgressLabel {
+                            Text(label)
+                                .lineLimit(1)
+                        }
+                    }
+                    .font(.caption2)
+                    .foregroundStyle(.secondary)
+                    questProgressView(state: context.state)
+                }
+            } else if let title = context.state.focusGoalTitle,
+                      let label = context.state.focusGoalProgressLabel {
                 HStack {
                     Label(title, systemImage: "scope")
                         .lineLimit(1)
@@ -160,6 +203,23 @@ struct SkillingTimeLiveActivityWidget: Widget {
         } else {
             Text(formatDuration(state.accumulatedActiveSeconds))
                 .monospacedDigit()
+        }
+    }
+
+    @ViewBuilder
+    private func questProgressView(
+        state: SkillingTimeActivityAttributes.ContentState
+    ) -> some View {
+        if let timerStart = state.questTimerStart,
+           let timerEnd = state.questTimerEnd,
+           timerStart < timerEnd,
+           !state.isPaused,
+           state.questIsComplete != true {
+            ProgressView(timerInterval: timerStart...timerEnd, countsDown: false)
+                .tint(.green)
+        } else {
+            ProgressView(value: clamped(state.questFraction ?? 0))
+                .tint(state.questIsComplete == true ? .green : .accentColor)
         }
     }
 

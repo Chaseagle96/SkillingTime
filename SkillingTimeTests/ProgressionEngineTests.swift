@@ -252,10 +252,27 @@ final class HistoryAttributionTests: XCTestCase {
             activeSeconds: 1_200
         )
 
-        let daily = try XCTUnwrap(
-            QuestEngine.currentQuests(sessions: [session], calendar: calendar, now: now)
-                .first { $0.id == "daily-practice" }
+        let period = QuestEngine.period(for: .daily, calendar: calendar, containing: now)
+        let assignment = QuestAssignment(
+            id: "daily-attribution",
+            templateID: "daily-put-in-time",
+            cadenceRawValue: QuestCadence.daily.rawValue,
+            kindRawValue: QuestKind.activeTime.rawValue,
+            slot: 0,
+            periodStart: period.start,
+            periodEnd: period.end,
+            timeZoneIdentifier: calendar.timeZone.identifier,
+            title: "Put in the Time",
+            questDescription: "Skill today.",
+            systemImage: "hourglass",
+            targetValue: 1_200
         )
+        assignment.currentValue = QuestEngine.currentValue(
+            for: assignment,
+            skills: [],
+            sessions: [session]
+        )
+        let daily = try XCTUnwrap(QuestEngine.status(assignment))
 
         XCTAssertEqual(daily.currentValue, 1_200)
         XCTAssertTrue(daily.isComplete)
@@ -572,7 +589,10 @@ final class SessionCommitServiceTests: XCTestCase {
             AchievementUnlock.self,
             ChronicleUnlock.self,
             SkillLedger.self,
-            SkillSpecialization.self
+            SkillSpecialization.self,
+            QuestAssignment.self,
+            ActivityDayLedger.self,
+            PersonalRecordEvent.self
         ])
         let configuration = ModelConfiguration(
             schema: schema,
@@ -591,7 +611,10 @@ final class SkillLedgerServiceTests: XCTestCase {
             AchievementUnlock.self,
             ChronicleUnlock.self,
             SkillLedger.self,
-            SkillSpecialization.self
+            SkillSpecialization.self,
+            QuestAssignment.self,
+            ActivityDayLedger.self,
+            PersonalRecordEvent.self
         ])
         let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
         let container = try ModelContainer(for: schema, configurations: [configuration])
@@ -654,6 +677,308 @@ final class SkillLedgerServiceTests: XCTestCase {
             )
         )
         XCTAssertEqual(ledger.rebuiltAt, rebuiltAt)
+    }
+}
+
+final class QuestboardV4Tests: XCTestCase {
+    func testGenerationIsDeterministicAndDoesNotRerollExistingPeriod() throws {
+        var calendar = Calendar(identifier: .gregorian)
+        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
+        let now = try XCTUnwrap(
+            calendar.date(from: DateComponents(year: 2026, month: 8, day: 10, hour: 9))
+        )
+        let skills = [
+            LifeSkill(name: "Cooking", symbolName: "fork.knife", accentHex: "FFFFFF", category: "Home"),
+            LifeSkill(name: "Reading", symbolName: "book", accentHex: "FFFFFF", category: "Learning"),
+            LifeSkill(name: "Exercise", symbolName: "figure.run", accentHex: "FFFFFF", category: "Wellbeing")
+        ]
+
+        let first = QuestEngine.makeAssignments(
+            cadence: .daily,
+            skills: skills,
+            sessions: [],
+            existingAssignments: [],
+            calendar: calendar,
+            now: now
+        )
+        let repeated = QuestEngine.makeAssignments(
+            cadence: .daily,
+            skills: skills,
+            sessions: [],
+            existingAssignments: first,
+            calendar: calendar,
+            now: now
+        )
+        let independentlyGenerated = QuestEngine.makeAssignments(
+            cadence: .daily,
+            skills: skills,
+            sessions: [],
+            existingAssignments: [],
+            calendar: calendar,
+            now: now
+        )
+
+        XCTAssertEqual(first.count, 3)
+        XCTAssertEqual(first.map(\.templateID), independentlyGenerated.map(\.templateID))
+        XCTAssertEqual(first.first?.templateID, "daily-put-in-time")
+        XCTAssertTrue(repeated.isEmpty)
+    }
+
+    func testIneligibleQuestTypesAreNotGenerated() throws {
+        let now = Date(timeIntervalSince1970: 2_000_000_000)
+        let skills = [
+            LifeSkill(name: "Cooking", symbolName: "fork.knife", accentHex: "FFFFFF", category: "Home", createdAt: now),
+            LifeSkill(name: "Reading", symbolName: "book", accentHex: "FFFFFF", category: "Learning", createdAt: now)
+        ]
+
+        let daily = QuestEngine.makeAssignments(
+            cadence: .daily,
+            skills: skills,
+            sessions: [],
+            existingAssignments: [],
+            now: now
+        )
+        let weekly = QuestEngine.makeAssignments(
+            cadence: .weekly,
+            skills: skills,
+            sessions: [],
+            existingAssignments: [],
+            now: now
+        )
+        let identifiers = Set((daily + weekly).map(\.templateID))
+
+        XCTAssertFalse(identifiers.contains("daily-diversify"))
+        XCTAssertFalse(identifiers.contains("daily-old-friend"))
+        XCTAssertFalse(identifiers.contains("daily-finish-focus"))
+        XCTAssertFalse(identifiers.contains("weekly-journeyman-work"))
+    }
+
+    @MainActor
+    func testCompletedQuestRemainsEarnedAfterSessionCorrection() throws {
+        let container = try makeV4Container()
+        let context = ModelContext(container)
+        let skill = LifeSkill(
+            name: "Reading",
+            symbolName: "book",
+            accentHex: "FFFFFF",
+            category: "Learning"
+        )
+        context.insert(skill)
+        try context.save()
+
+        let endedAt = Date.now
+        let draft = CompletedSessionDraft(
+            id: UUID(),
+            skillID: skill.id,
+            startedAt: endedAt.addingTimeInterval(-3_600),
+            endedAt: endedAt,
+            activeSeconds: 3_600,
+            focusGoal: nil,
+            shouldResumeOnCancel: false
+        )
+        let outcome = try SessionCommitService.commit(
+            draft: draft,
+            countedSeconds: 3_600,
+            note: "Deep reading",
+            source: .timer,
+            skill: skill,
+            in: context,
+            now: endedAt
+        )
+        XCTAssertFalse(outcome.questsCompleted.isEmpty)
+
+        let session = try XCTUnwrap(context.fetch(FetchDescriptor<SkillSession>()).first)
+        let completedBefore = try XCTUnwrap(
+            context.fetch(FetchDescriptor<QuestAssignment>()).first {
+                $0.completedAt != nil
+            }
+        )
+        _ = try SessionCommitService.update(
+            session: session,
+            endedAt: endedAt,
+            activeSeconds: 60,
+            note: "Corrected",
+            in: context
+        )
+
+        let assignment = try XCTUnwrap(
+            context.fetch(FetchDescriptor<QuestAssignment>()).first {
+                $0.id == completedBefore.id
+            }
+        )
+        XCTAssertNotNil(assignment.completedAt)
+        XCTAssertTrue(try XCTUnwrap(QuestEngine.status(assignment)).isComplete)
+    }
+
+    @MainActor
+    func testDailyLedgerRebuildsExactTimeAndXP() throws {
+        let container = try makeV4Container()
+        let context = ModelContext(container)
+        let skill = LifeSkill(
+            name: "Cooking",
+            symbolName: "fork.knife",
+            accentHex: "FFFFFF",
+            category: "Home"
+        )
+        context.insert(skill)
+        let end = Date(timeIntervalSince1970: 2_000_000_000)
+        context.insert(
+            SkillSession(
+                skillID: skill.id,
+                startedAt: end.addingTimeInterval(-3),
+                endedAt: end,
+                activeSeconds: 3
+            )
+        )
+        context.insert(
+            SkillSession(
+                skillID: skill.id,
+                startedAt: end.addingTimeInterval(-63),
+                endedAt: end.addingTimeInterval(60),
+                activeSeconds: 60
+            )
+        )
+        try context.save()
+
+        try ActivityDayLedgerService.rebuildAll(in: context)
+        let ledger = try XCTUnwrap(
+            context.fetch(FetchDescriptor<ActivityDayLedger>()).first
+        )
+        XCTAssertEqual(ledger.totalActiveSeconds, 63)
+        XCTAssertEqual(ledger.xpEarned, 21)
+        XCTAssertEqual(ledger.sessionCount, 2)
+        XCTAssertEqual(ledger.distinctSkillCount, 1)
+    }
+
+    @MainActor
+    func testLongerSessionCreatesPersonalBestReveal() {
+        let skill = LifeSkill(
+            name: "Reading",
+            symbolName: "book",
+            accentHex: "FFFFFF",
+            category: "Learning"
+        )
+        let firstEnd = Date(timeIntervalSince1970: 100_000)
+        let first = SkillSession(
+            skillID: skill.id,
+            startedAt: firstEnd.addingTimeInterval(-600),
+            endedAt: firstEnd,
+            activeSeconds: 600
+        )
+        let secondEnd = firstEnd.addingTimeInterval(86_400)
+        let second = SkillSession(
+            skillID: skill.id,
+            startedAt: secondEnd.addingTimeInterval(-900),
+            endedAt: secondEnd,
+            activeSeconds: 900
+        )
+
+        let records = PersonalRecordEngine.newRecords(
+            triggeringSession: second,
+            beforeSessions: [first],
+            afterSessions: [first, second],
+            skills: [skill]
+        )
+
+        XCTAssertTrue(records.contains { $0.kind == .longestSkillSession })
+        XCTAssertEqual(
+            records.first { $0.kind == .longestSkillSession }?.previousValue,
+            600
+        )
+    }
+
+    @MainActor
+    private func makeV4Container() throws -> ModelContainer {
+        let schema = Schema([
+            LifeSkill.self,
+            SkillSession.self,
+            AchievementUnlock.self,
+            ChronicleUnlock.self,
+            SkillLedger.self,
+            SkillSpecialization.self,
+            QuestAssignment.self,
+            ActivityDayLedger.self,
+            PersonalRecordEvent.self
+        ])
+        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
+        return try ModelContainer(for: schema, configurations: [configuration])
+    }
+}
+
+final class SchemaMigrationV4Tests: XCTestCase {
+    @MainActor
+    func testV3StoreMigratesWithoutLosingAuthoritativeHistory() throws {
+        let directory = FileManager.default.temporaryDirectory
+            .appendingPathComponent("SkillingTimeMigration-\(UUID().uuidString)", isDirectory: true)
+        try FileManager.default.createDirectory(
+            at: directory,
+            withIntermediateDirectories: true
+        )
+        defer { try? FileManager.default.removeItem(at: directory) }
+
+        let storeURL = directory.appendingPathComponent("Store.sqlite")
+        let skillID = UUID()
+        let sessionID = UUID()
+        let endedAt = Date(timeIntervalSince1970: 2_000_000_000)
+
+        do {
+            let oldSchema = Schema(versionedSchema: SkillingTimeSchemaV3.self)
+            let oldConfiguration = ModelConfiguration(
+                "migration-test",
+                schema: oldSchema,
+                url: storeURL
+            )
+            let oldContainer = try ModelContainer(
+                for: oldSchema,
+                configurations: [oldConfiguration]
+            )
+            let oldContext = ModelContext(oldContainer)
+            oldContext.insert(
+                SkillingTimeSchemaV3.LifeSkill(
+                    id: skillID,
+                    name: "Reading",
+                    symbolName: "book",
+                    accentHex: "FFFFFF",
+                    category: "Learning"
+                )
+            )
+            oldContext.insert(
+                SkillingTimeSchemaV3.SkillSession(
+                    id: sessionID,
+                    skillID: skillID,
+                    startedAt: endedAt.addingTimeInterval(-1_800),
+                    endedAt: endedAt,
+                    activeSeconds: 1_800,
+                    note: "Preserve this"
+                )
+            )
+            try oldContext.save()
+        }
+
+        let newSchema = Schema(versionedSchema: SkillingTimeSchemaV4.self)
+        let newConfiguration = ModelConfiguration(
+            "migration-test",
+            schema: newSchema,
+            url: storeURL
+        )
+        let newContainer = try ModelContainer(
+            for: newSchema,
+            migrationPlan: SkillingTimeMigrationPlan.self,
+            configurations: [newConfiguration]
+        )
+        let newContext = ModelContext(newContainer)
+        let skill = try XCTUnwrap(
+            newContext.fetch(FetchDescriptor<LifeSkill>()).first { $0.id == skillID }
+        )
+        let session = try XCTUnwrap(
+            newContext.fetch(FetchDescriptor<SkillSession>()).first { $0.id == sessionID }
+        )
+
+        XCTAssertEqual(skill.name, "Reading")
+        XCTAssertEqual(session.skillID, skillID)
+        XCTAssertEqual(session.activeSeconds, 1_800)
+        XCTAssertEqual(session.note, "Preserve this")
+        XCTAssertNil(session.recordedFocusGoal)
     }
 }
 

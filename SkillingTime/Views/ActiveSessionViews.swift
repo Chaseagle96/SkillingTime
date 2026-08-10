@@ -690,6 +690,7 @@ struct SessionSummaryView: View {
     private var unlockedRewards: some View {
         if !outcome.achievementsUnlocked.isEmpty
             || !outcome.questsCompleted.isEmpty
+            || !outcome.personalRecords.isEmpty
             || !outcome.capabilitiesUnlocked.isEmpty {
             VStack(spacing: 12) {
                 ForEach(outcome.achievementsUnlocked) { achievement in
@@ -709,6 +710,16 @@ struct SessionSummaryView: View {
                         description: quest.description,
                         systemImage: quest.systemImage,
                         tint: SkillingTimeTheme.success
+                    )
+                }
+
+                ForEach(outcome.personalRecords) { record in
+                    RewardRevealCard(
+                        eyebrow: "NEW PERSONAL BEST",
+                        title: record.title,
+                        description: record.description,
+                        systemImage: record.systemImage,
+                        tint: Color(hex: outcome.accentHex)
                     )
                 }
 

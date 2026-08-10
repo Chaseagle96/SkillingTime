@@ -45,6 +45,10 @@ final class SkillSession {
     var activeSeconds: Int
     var note: String
     var sourceRawValue: String
+    var focusGoalKindRawValue: String?
+    var focusGoalTargetValue: Int?
+    var focusGoalStartingTotalXP: Int?
+    var focusGoalCompletedRawValue: Bool?
 
     init(
         id: UUID = UUID(),
@@ -53,7 +57,9 @@ final class SkillSession {
         endedAt: Date,
         activeSeconds: Int,
         note: String = "",
-        source: SessionSource = .timer
+        source: SessionSource = .timer,
+        focusGoal: SessionFocusGoal? = nil,
+        focusGoalCompleted: Bool = false
     ) {
         self.id = id
         self.skillID = skillID
@@ -62,6 +68,10 @@ final class SkillSession {
         self.activeSeconds = max(0, activeSeconds)
         self.note = note
         self.sourceRawValue = source.rawValue
+        self.focusGoalKindRawValue = focusGoal?.kind.rawValue
+        self.focusGoalTargetValue = focusGoal?.targetValue
+        self.focusGoalStartingTotalXP = focusGoal?.startingTotalXP
+        self.focusGoalCompletedRawValue = focusGoal == nil ? nil : focusGoalCompleted
     }
 
     var source: SessionSource {
@@ -71,6 +81,25 @@ final class SkillSession {
     /// The calendar instant used for history, Quest, and achievement attribution.
     /// A session is credited when the effort was completed rather than when it began.
     var creditedAt: Date { endedAt }
+
+    var recordedFocusGoal: SessionFocusGoal? {
+        guard
+            let rawKind = focusGoalKindRawValue,
+            let kind = SessionFocusGoalKind(rawValue: rawKind),
+            let targetValue = focusGoalTargetValue,
+            let startingTotalXP = focusGoalStartingTotalXP
+        else { return nil }
+
+        return SessionFocusGoal(
+            kind: kind,
+            targetValue: targetValue,
+            startingTotalXP: startingTotalXP
+        )
+    }
+
+    var completedFocusGoal: Bool {
+        focusGoalCompletedRawValue ?? false
+    }
 }
 
 @Model
@@ -174,6 +203,151 @@ final class SkillSpecialization {
         self.skillID = skillID
         self.title = title
         self.chosenAt = chosenAt
+    }
+}
+
+/// A frozen, period-bound challenge generated from the player's real Skillbook.
+/// `currentValue` is a rebuildable cache; session history remains authoritative.
+@Model
+final class QuestAssignment {
+    @Attribute(.unique) var id: String
+    var templateID: String
+    var cadenceRawValue: String
+    var kindRawValue: String
+    var slot: Int
+    var periodStart: Date
+    var periodEnd: Date
+    var timeZoneIdentifier: String
+    var title: String
+    var questDescription: String
+    var systemImage: String
+    var targetSkillID: UUID?
+    var targetSkillName: String?
+    var targetValue: Int
+    var baselineValue: Int
+    var currentValue: Int
+    var generatedAt: Date
+    var completedAt: Date?
+    var triggeringSessionID: UUID?
+    var generationVersion: Int
+    var retiredAt: Date?
+
+    init(
+        id: String,
+        templateID: String,
+        cadenceRawValue: String,
+        kindRawValue: String,
+        slot: Int,
+        periodStart: Date,
+        periodEnd: Date,
+        timeZoneIdentifier: String,
+        title: String,
+        questDescription: String,
+        systemImage: String,
+        targetSkillID: UUID? = nil,
+        targetSkillName: String? = nil,
+        targetValue: Int,
+        baselineValue: Int = 0,
+        currentValue: Int = 0,
+        generatedAt: Date = .now,
+        completedAt: Date? = nil,
+        triggeringSessionID: UUID? = nil,
+        generationVersion: Int = 1,
+        retiredAt: Date? = nil
+    ) {
+        self.id = id
+        self.templateID = templateID
+        self.cadenceRawValue = cadenceRawValue
+        self.kindRawValue = kindRawValue
+        self.slot = slot
+        self.periodStart = periodStart
+        self.periodEnd = periodEnd
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.title = title
+        self.questDescription = questDescription
+        self.systemImage = systemImage
+        self.targetSkillID = targetSkillID
+        self.targetSkillName = targetSkillName
+        self.targetValue = max(1, targetValue)
+        self.baselineValue = max(0, baselineValue)
+        self.currentValue = max(0, currentValue)
+        self.generatedAt = generatedAt
+        self.completedAt = completedAt
+        self.triggeringSessionID = triggeringSessionID
+        self.generationVersion = generationVersion
+        self.retiredAt = retiredAt
+    }
+}
+
+/// Rebuildable calendar aggregates used by Today, Momentum, and records.
+@Model
+final class ActivityDayLedger {
+    @Attribute(.unique) var id: String
+    var dayStart: Date
+    var timeZoneIdentifier: String
+    var totalActiveSeconds: Int
+    var xpEarned: Int
+    var sessionCount: Int
+    var distinctSkillCount: Int
+    var longestSessionSeconds: Int
+    var rebuiltAt: Date
+
+    init(
+        id: String,
+        dayStart: Date,
+        timeZoneIdentifier: String,
+        totalActiveSeconds: Int = 0,
+        xpEarned: Int = 0,
+        sessionCount: Int = 0,
+        distinctSkillCount: Int = 0,
+        longestSessionSeconds: Int = 0,
+        rebuiltAt: Date = .now
+    ) {
+        self.id = id
+        self.dayStart = dayStart
+        self.timeZoneIdentifier = timeZoneIdentifier
+        self.totalActiveSeconds = max(0, totalActiveSeconds)
+        self.xpEarned = max(0, xpEarned)
+        self.sessionCount = max(0, sessionCount)
+        self.distinctSkillCount = max(0, distinctSkillCount)
+        self.longestSessionSeconds = max(0, longestSessionSeconds)
+        self.rebuiltAt = rebuiltAt
+    }
+}
+
+/// Append-only evidence that a committed session established a new personal best.
+@Model
+final class PersonalRecordEvent {
+    @Attribute(.unique) var id: String
+    var kindRawValue: String
+    var skillID: UUID?
+    var title: String
+    var recordDescription: String
+    var value: Int
+    var previousValue: Int
+    var achievedAt: Date
+    var triggeringSessionID: UUID
+
+    init(
+        id: String,
+        kindRawValue: String,
+        skillID: UUID?,
+        title: String,
+        recordDescription: String,
+        value: Int,
+        previousValue: Int,
+        achievedAt: Date,
+        triggeringSessionID: UUID
+    ) {
+        self.id = id
+        self.kindRawValue = kindRawValue
+        self.skillID = skillID
+        self.title = title
+        self.recordDescription = recordDescription
+        self.value = max(0, value)
+        self.previousValue = max(0, previousValue)
+        self.achievedAt = achievedAt
+        self.triggeringSessionID = triggeringSessionID
     }
 }
 
