@@ -12,12 +12,12 @@ permissions:
 
 jobs:
   build:
-    name: Test, build, and validate Questboard IPA
+    name: Test, build, and validate Character IPA
     runs-on: macos-26
     timeout-minutes: 45
 
     env:
-      IPA_NAME: SkillingTime-v0.4.0-Questboard.ipa
+      IPA_NAME: SkillingTime-v0.5.0-The-Character.ipa
 
     steps:
       - name: Checkout
@@ -49,7 +49,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -showBuildSettings | tee "$RUNNER_TEMP/build-settings.txt"
 
-      - name: Run progression, Questboard, and migration tests
+      - name: Run progression, Character, Questboard, and migration tests
         run: |
           set -euxo pipefail
           DEVICE_ID=$(python3 - <<'PY'
@@ -196,16 +196,16 @@ jobs:
           lipo -archs "$IPA_EXT/SkillingTimeWidgets" | grep -qw arm64
 
           shasum -a 256 "$IPA_NAME" | tee "$IPA_NAME.sha256"
-          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.4.0-Questboard-validation.txt
+          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.5.0-The-Character-validation.txt
 
       - name: Upload validated IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SkillingTime-v0.4.0-Questboard
+          name: SkillingTime-v0.5.0-The-Character
           path: |
-            SkillingTime-v0.4.0-Questboard.ipa
-            SkillingTime-v0.4.0-Questboard.ipa.sha256
-            SkillingTime-v0.4.0-Questboard-validation.txt
+            SkillingTime-v0.5.0-The-Character.ipa
+            SkillingTime-v0.5.0-The-Character.ipa.sha256
+            SkillingTime-v0.5.0-The-Character-validation.txt
           if-no-files-found: error
           retention-days: 30
 
