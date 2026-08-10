@@ -1287,7 +1287,7 @@ final class SchemaMigrationV5Tests: XCTestCase {
         XCTAssertEqual(assignment.skillID, skillID)
         XCTAssertEqual(assignment.path, .insight)
         XCTAssertEqual(ledger.totalActiveSeconds, 1_800)
-        XCTAssertNotNil(context.fetch(FetchDescriptor<CharacterProfile>()).first)
+        XCTAssertNotNil(try context.fetch(FetchDescriptor<CharacterProfile>()).first)
     }
 }
 
