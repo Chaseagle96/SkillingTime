@@ -1,0 +1,41 @@
+name: Publish Skilling Time Validated IPA
+
+on:
+  workflow_run:
+    workflows: ["Build Skilling Time iPhoneOS IPA"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  publish:
+    if: ${{ github.event.workflow_run.conclusion == 'success' }}
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+      - name: Download validated Actions artifact
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+        run: |
+          set -euxo pipefail
+          mkdir -p /tmp/skillingtime-artifact
+          gh run download "$RUN_ID" --repo "$GITHUB_REPOSITORY" --name SkillingTime-v0.3.1-LiveActivity --dir /tmp/skillingtime-artifact
+          test -f /tmp/skillingtime-artifact/SkillingTime-v0.3.1-LiveActivity.ipa
+          test -f /tmp/skillingtime-artifact/SkillingTime-v0.3.1-LiveActivity.ipa.sha256
+      - name: Publish stable private release asset
+        env:
+          GH_TOKEN: ${{ github.token }}
+        run: |
+          set -euxo pipefail
+          TAG='v0.3.1-liveactivity'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target main --title 'Skilling Time v0.3.1 Live Activity' --notes 'Apple-SDK iPhoneOS build with structurally validated SkillingTimeWidgets.appex.' --prerelease
+          fi
+          gh release upload "$TAG" \
+            /tmp/skillingtime-artifact/SkillingTime-v0.3.1-LiveActivity.ipa \
+            /tmp/skillingtime-artifact/SkillingTime-v0.3.1-LiveActivity.ipa.sha256 \
+            /tmp/skillingtime-artifact/ipa-contents.txt \
+            --repo "$GITHUB_REPOSITORY" --clobber
