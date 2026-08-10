@@ -23,6 +23,7 @@ enum QuestKind: String, Codable, Sendable {
     case journeymanXP
     case focusGoal
     case sessionCount
+    case pathTime
 }
 
 extension QuestAssignment {
@@ -45,6 +46,7 @@ struct QuestStatus: Identifiable, Equatable, Sendable {
     let periodStart: Date
     let periodEnd: Date
     let targetSkillID: UUID?
+    let targetPathRawValue: String?
     let completedAt: Date?
 
     var isComplete: Bool { completedAt != nil || currentValue >= targetValue }
@@ -63,11 +65,12 @@ private struct QuestCandidate {
     let systemImage: String
     let targetSkillID: UUID?
     let targetSkillName: String?
+    var targetPathRawValue: String? = nil
     let targetValue: Int
 }
 
 enum QuestEngine {
-    static let generationVersion = 1
+    static let generationVersion = 2
     static let dailyAssignmentCount = 3
     static let weeklyAssignmentCount = 2
 
@@ -107,6 +110,7 @@ enum QuestEngine {
             periodStart: assignment.periodStart,
             periodEnd: assignment.periodEnd,
             targetSkillID: assignment.targetSkillID,
+            targetPathRawValue: assignment.targetPathRawValue,
             completedAt: assignment.completedAt
         )
     }
@@ -150,6 +154,7 @@ enum QuestEngine {
         skills: [LifeSkill],
         sessions: [SkillSession],
         existingAssignments: [QuestAssignment],
+        pathAssignments: [SkillPathAssignment] = [],
         calendar: Calendar = .current,
         now: Date = .now
     ) -> [QuestAssignment] {
@@ -159,6 +164,7 @@ enum QuestEngine {
             cadence: cadence,
             activeSkills: activeSkills,
             sessions: sessions,
+            pathAssignments: pathAssignments,
             interval: interval,
             calendar: calendar
         )
@@ -177,7 +183,6 @@ enum QuestEngine {
         let openSlots = (0..<desiredCount).filter { !occupiedSlots.contains($0) }
         guard !openSlots.isEmpty else { return [] }
 
-        let anchorID = cadence == .daily ? "daily-put-in-time" : "weekly-long-haul"
         let recentCutoff = cadence == .daily
             ? interval.start.addingTimeInterval(-3 * 86_400)
             : interval.start.addingTimeInterval(-21 * 86_400)
@@ -189,14 +194,16 @@ enum QuestEngine {
         let seed = "\(cadence.rawValue)|\(Int(interval.start.timeIntervalSince1970))|\(activeSkills.map { $0.id.uuidString }.sorted().joined(separator: ","))"
         var available = candidates.filter { !usedTemplateIDs.contains($0.templateID) }
         available.sort {
-            if ($0.templateID == anchorID) != ($1.templateID == anchorID) {
-                return $0.templateID == anchorID
+            let lhsPriority = assignmentPriority($0)
+            let rhsPriority = assignmentPriority($1)
+            if lhsPriority != rhsPriority {
+                return lhsPriority < rhsPriority
             }
             if recentlyUsed.contains($0.templateID) != recentlyUsed.contains($1.templateID) {
                 return !recentlyUsed.contains($0.templateID)
             }
-            let lhsHash = stableHash("\(seed)|\($0.templateID)|\($0.targetSkillID?.uuidString ?? "global")")
-            let rhsHash = stableHash("\(seed)|\($1.templateID)|\($1.targetSkillID?.uuidString ?? "global")")
+            let lhsHash = stableHash("\(seed)|\($0.templateID)|\($0.targetSkillID?.uuidString ?? $0.targetPathRawValue ?? "global")")
+            let rhsHash = stableHash("\(seed)|\($1.templateID)|\($1.targetSkillID?.uuidString ?? $1.targetPathRawValue ?? "global")")
             if lhsHash != rhsHash { return lhsHash < rhsHash }
             return $0.templateID < $1.templateID
         }
@@ -216,7 +223,8 @@ enum QuestEngine {
     static func currentValue(
         for assignment: QuestAssignment,
         skills: [LifeSkill],
-        sessions: [SkillSession]
+        sessions: [SkillSession],
+        pathAssignments: [SkillPathAssignment] = []
     ) -> Int {
         guard let kind = assignment.kind else { return 0 }
         let periodSessions = sessions.filter {
@@ -258,6 +266,17 @@ enum QuestEngine {
             return matchingSkillSessions.filter(\.completedFocusGoal).count
         case .sessionCount:
             return periodSessions.count
+        case .pathTime:
+            guard let targetRaw = assignment.targetPathRawValue,
+                  let targetPath = CharacterPath(rawValue: targetRaw) else { return 0 }
+            return periodSessions.reduce(0) { total, session in
+                CharacterProgressionEngine.path(
+                    for: session,
+                    assignments: pathAssignments
+                ) == targetPath
+                    ? total + max(0, session.activeSeconds)
+                    : total
+            }
         }
     }
 
@@ -320,7 +339,8 @@ enum QuestEngine {
             target = max(1, goal.targetValue)
             isTimeBased = focusGoal.kind == .duration
             liveProgressLabel = goal.progressLabel
-        default:
+        case .pathTime, .sameSkillSessions, .distinctSkills, .gainLevels,
+             .oldFriend, .sessionCount:
             return nil
         }
 
@@ -353,6 +373,7 @@ enum QuestEngine {
         cadence: QuestCadence,
         activeSkills: [LifeSkill],
         sessions: [SkillSession],
+        pathAssignments: [SkillPathAssignment],
         interval: DateInterval,
         calendar: Calendar
     ) -> [QuestCandidate] {
@@ -368,6 +389,7 @@ enum QuestEngine {
             return weeklyCandidates(
                 activeSkills: activeSkills,
                 sessions: sessions,
+                pathAssignments: pathAssignments,
                 interval: interval,
                 calendar: calendar
             )
@@ -445,8 +467,11 @@ enum QuestEngine {
         }
 
         let canGainLevel = activeSkills.contains { skill in
-            progress(for: skill, sessions: sessions).level
-                < ProgressionEngine.maximumLevel(curveVersion: skill.progressionCurveVersion)
+            let currentLevel = progress(for: skill, sessions: sessions).level
+            let maximumLevel = ProgressionEngine.maximumLevel(
+                curveVersion: skill.progressionCurveVersion
+            )
+            return currentLevel < maximumLevel
         }
         if canGainLevel {
             candidates.append(
@@ -510,6 +535,7 @@ enum QuestEngine {
     private static func weeklyCandidates(
         activeSkills: [LifeSkill],
         sessions: [SkillSession],
+        pathAssignments: [SkillPathAssignment],
         interval: DateInterval,
         calendar: Calendar
     ) -> [QuestCandidate] {
@@ -547,6 +573,33 @@ enum QuestEngine {
                 targetValue: sessionTarget
             )
         ]
+
+        if let path = preferredCharacterPath(
+            activeSkills: activeSkills,
+            sessions: sessions,
+            assignments: pathAssignments
+        ) {
+            let target = adaptivePathSeconds(
+                path: path,
+                sessions: sessions,
+                assignments: pathAssignments,
+                before: interval.start
+            )
+            candidates.append(
+                QuestCandidate(
+                    templateID: "weekly-character-path",
+                    cadence: .weekly,
+                    kind: .pathTime,
+                    title: "Deepen \(path.title)",
+                    description: "Spend \(DurationText.compact(target)) on the \(path.title) Path this week.",
+                    systemImage: path.systemImage,
+                    targetSkillID: nil,
+                    targetSkillName: nil,
+                    targetPathRawValue: path.rawValue,
+                    targetValue: target
+                )
+            )
+        }
 
         if activeSkills.count >= 3 {
             let target = min(4, activeSkills.count)
@@ -612,7 +665,9 @@ enum QuestEngine {
         calendar: Calendar,
         now: Date
     ) -> QuestAssignment {
-        let skillScope = candidate.targetSkillID?.uuidString.lowercased() ?? "global"
+        let skillScope = candidate.targetSkillID?.uuidString.lowercased()
+            ?? candidate.targetPathRawValue
+            ?? "global"
         let id = [
             "quest-v\(generationVersion)",
             candidate.cadence.rawValue,
@@ -635,6 +690,7 @@ enum QuestEngine {
             systemImage: candidate.systemImage,
             targetSkillID: candidate.targetSkillID,
             targetSkillName: candidate.targetSkillName,
+            targetPathRawValue: candidate.targetPathRawValue,
             targetValue: candidate.targetValue,
             generatedAt: now,
             generationVersion: generationVersion
@@ -645,7 +701,7 @@ enum QuestEngine {
         let safeCurrent = max(0, current)
         let safeTarget = max(1, target)
         switch kind {
-        case .activeTime, .deepSession:
+        case .activeTime, .deepSession, .pathTime:
             return "\(DurationText.compact(min(safeCurrent, safeTarget))) of \(DurationText.compact(safeTarget))"
         case .journeymanXP:
             return "\(min(safeCurrent, safeTarget).formatted()) of \(safeTarget.formatted()) XP"
@@ -847,6 +903,69 @@ enum QuestEngine {
         return min(max(rounded, minimum), maximum)
     }
 
+    private static func preferredCharacterPath(
+        activeSkills: [LifeSkill],
+        sessions: [SkillSession],
+        assignments: [SkillPathAssignment]
+    ) -> CharacterPath? {
+        let activeSkillIDs = Set(activeSkills.map(\.id))
+        let totals = sessions.reduce(into: [CharacterPath: Int]()) { result, session in
+            guard activeSkillIDs.contains(session.skillID),
+                  let path = CharacterProgressionEngine.path(
+                    for: session,
+                    assignments: assignments
+                  ) else { return }
+            result[path, default: 0] += max(0, session.activeSeconds)
+        }
+        if let practiced = totals.sorted(by: {
+            if $0.value != $1.value { return $0.value > $1.value }
+            return $0.key.rawValue < $1.key.rawValue
+        }).first?.key {
+            return practiced
+        }
+
+        let represented = activeSkills.compactMap {
+            CharacterProgressionEngine.currentPath(
+                for: $0.id,
+                assignments: assignments
+            )
+        }
+        return CharacterPath.allCases.first { represented.contains($0) }
+    }
+
+    private static func adaptivePathSeconds(
+        path: CharacterPath,
+        sessions: [SkillSession],
+        assignments: [SkillPathAssignment],
+        before date: Date
+    ) -> Int {
+        let cutoff = date.addingTimeInterval(-28 * 86_400)
+        let recentSeconds = sessions.reduce(0) { total, session in
+            guard cutoff <= session.creditedAt,
+                  session.creditedAt < date,
+                  CharacterProgressionEngine.path(
+                    for: session,
+                    assignments: assignments
+                  ) == path else { return total }
+            return total + max(0, session.activeSeconds)
+        }
+        let averageWeek = recentSeconds == 0 ? 90 * 60 : recentSeconds / 4
+        return rounded(
+            Int(Double(averageWeek) * 1.1),
+            increment: 15 * 60,
+            minimum: 60 * 60,
+            maximum: 4 * 3_600
+        )
+    }
+
+    private static func assignmentPriority(_ candidate: QuestCandidate) -> Int {
+        switch candidate.templateID {
+        case "daily-put-in-time", "weekly-long-haul": 0
+        case "weekly-character-path": 1
+        default: 2
+        }
+    }
+
     private static func stableHash(_ value: String) -> UInt64 {
         value.utf8.reduce(UInt64(14_695_981_039_346_656_037)) { hash, byte in
             (hash ^ UInt64(byte)) &* 1_099_511_628_211
@@ -886,6 +1005,7 @@ enum QuestBoardService {
             let skills = try modelContext.fetch(FetchDescriptor<LifeSkill>())
             let sessions = try modelContext.fetch(FetchDescriptor<SkillSession>())
             var assignments = try modelContext.fetch(FetchDescriptor<QuestAssignment>())
+            let pathAssignments = try modelContext.fetch(FetchDescriptor<SkillPathAssignment>())
 
             for cadence in QuestCadence.allCases {
                 let generated = QuestEngine.makeAssignments(
@@ -893,6 +1013,7 @@ enum QuestBoardService {
                     skills: skills,
                     sessions: sessions,
                     existingAssignments: assignments,
+                    pathAssignments: pathAssignments,
                     calendar: calendar,
                     now: now
                 )
@@ -906,6 +1027,7 @@ enum QuestBoardService {
                 assignments: assignments,
                 skills: skills,
                 sessions: sessions,
+                pathAssignments: pathAssignments,
                 triggeringSessionID: nil,
                 now: now
             )
@@ -925,6 +1047,7 @@ enum QuestBoardService {
         assignments: inout [QuestAssignment],
         skills: [LifeSkill],
         sessions: [SkillSession],
+        pathAssignments: [SkillPathAssignment] = [],
         in modelContext: ModelContext,
         calendar: Calendar = .current,
         now: Date = .now
@@ -935,6 +1058,7 @@ enum QuestBoardService {
                 skills: skills,
                 sessions: sessions,
                 existingAssignments: assignments,
+                pathAssignments: pathAssignments,
                 calendar: calendar,
                 now: now
             )
@@ -950,6 +1074,7 @@ enum QuestBoardService {
         assignments: [QuestAssignment],
         skills: [LifeSkill],
         sessions: [SkillSession],
+        pathAssignments: [SkillPathAssignment] = [],
         triggeringSessionID: UUID?,
         now: Date = .now
     ) -> [QuestStatus] {
@@ -963,7 +1088,8 @@ enum QuestBoardService {
             let value = QuestEngine.currentValue(
                 for: assignment,
                 skills: skills,
-                sessions: sessions
+                sessions: sessions,
+                pathAssignments: pathAssignments
             )
             assignment.currentValue = max(0, value)
 

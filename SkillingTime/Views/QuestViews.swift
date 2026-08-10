@@ -10,6 +10,8 @@ struct TodayView: View {
     @Query(sort: \ActivityDayLedger.dayStart, order: .reverse)
     private var dayLedgers: [ActivityDayLedger]
     @Query private var skillLedgers: [SkillLedger]
+    @Query(sort: \ExpertChallenge.startedAt, order: .reverse)
+    private var expertChallenges: [ExpertChallenge]
 
     @State private var showingActiveSession = false
     @State private var preparationError: String?
@@ -23,6 +25,7 @@ struct TodayView: View {
                     momentumCard(now: context.date)
                     focusCard(now: context.date)
                     questboard(now: context.date)
+                    expertChallengeSection(now: context.date)
                     continueSkillingCard
                     personalBests
                 }
@@ -256,6 +259,47 @@ struct TodayView: View {
 
             ForEach(quests) { quest in
                 QuestCard(quest: quest)
+            }
+        }
+    }
+
+    @ViewBuilder
+    private func expertChallengeSection(now: Date) -> some View {
+        let active = expertChallenges.filter { $0.isActive(at: now) }
+        if !active.isEmpty {
+            VStack(spacing: 10) {
+                SectionTitle(
+                    title: "Expert Undertakings",
+                    subtitle: "Long-form challenges chosen from Expert Skills"
+                )
+                ForEach(active) { challenge in
+                    let skill = skills.first { $0.id == challenge.skillID }
+                    VStack(alignment: .leading, spacing: 9) {
+                        HStack {
+                            Label(challenge.title, systemImage: challenge.systemImage)
+                                .font(.headline)
+                            Spacer()
+                            Text(skill?.name ?? "Skill")
+                                .font(.caption.weight(.semibold))
+                                .foregroundStyle(.secondary)
+                        }
+                        ProgressView(value: challenge.fractionComplete)
+                            .tint(SkillingTimeTheme.gold)
+                        HStack {
+                            Text(challenge.progressLabel)
+                            Spacer()
+                            Text(challenge.endsAt, format: .dateTime.month(.abbreviated).day())
+                        }
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                    }
+                    .padding(15)
+                    .background(
+                        SkillingTimeTheme.gold.opacity(0.07),
+                        in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                    )
+                    .accessibilityElement(children: .combine)
+                }
             }
         }
     }

@@ -223,6 +223,7 @@ final class QuestAssignment {
     var systemImage: String
     var targetSkillID: UUID?
     var targetSkillName: String?
+    var targetPathRawValue: String?
     var targetValue: Int
     var baselineValue: Int
     var currentValue: Int
@@ -246,6 +247,7 @@ final class QuestAssignment {
         systemImage: String,
         targetSkillID: UUID? = nil,
         targetSkillName: String? = nil,
+        targetPathRawValue: String? = nil,
         targetValue: Int,
         baselineValue: Int = 0,
         currentValue: Int = 0,
@@ -268,6 +270,7 @@ final class QuestAssignment {
         self.systemImage = systemImage
         self.targetSkillID = targetSkillID
         self.targetSkillName = targetSkillName
+        self.targetPathRawValue = targetPathRawValue
         self.targetValue = max(1, targetValue)
         self.baselineValue = max(0, baselineValue)
         self.currentValue = max(0, currentValue)
@@ -276,6 +279,209 @@ final class QuestAssignment {
         self.triggeringSessionID = triggeringSessionID
         self.generationVersion = generationVersion
         self.retiredAt = retiredAt
+    }
+}
+
+/// An effective-dated classification of a Skill into one Character Path.
+/// The first assignment can explicitly backfill existing history. Later
+/// assignments affect only sessions credited on or after `effectiveFrom`.
+@Model
+final class SkillPathAssignment {
+    @Attribute(.unique) var id: String
+    var skillID: UUID
+    var pathRawValue: String
+    var effectiveFrom: Date
+    var createdAt: Date
+    var isConfirmed: Bool
+
+    init(
+        id: String,
+        skillID: UUID,
+        pathRawValue: String,
+        effectiveFrom: Date,
+        createdAt: Date = .now,
+        isConfirmed: Bool = false
+    ) {
+        self.id = id
+        self.skillID = skillID
+        self.pathRawValue = pathRawValue
+        self.effectiveFrom = effectiveFrom
+        self.createdAt = createdAt
+        self.isConfirmed = isConfirmed
+    }
+
+    static func identifier(skillID: UUID, effectiveFrom: Date) -> String {
+        let milliseconds = Int64((effectiveFrom.timeIntervalSince1970 * 1_000).rounded())
+        return "path|\(skillID.uuidString.lowercased())|\(milliseconds)"
+    }
+}
+
+/// Rebuildable Character Path aggregate. `SkillSession` and effective-dated
+/// `SkillPathAssignment` records remain authoritative.
+@Model
+final class CharacterPathLedger {
+    @Attribute(.unique) var pathRawValue: String
+    var totalActiveSeconds: Int
+    var sessionCount: Int
+    var latestSessionAt: Date?
+    var curveVersion: Int
+    var rebuiltAt: Date
+
+    init(
+        pathRawValue: String,
+        totalActiveSeconds: Int = 0,
+        sessionCount: Int = 0,
+        latestSessionAt: Date? = nil,
+        curveVersion: Int = 1,
+        rebuiltAt: Date = .now
+    ) {
+        self.pathRawValue = pathRawValue
+        self.totalActiveSeconds = max(0, totalActiveSeconds)
+        self.sessionCount = max(0, sessionCount)
+        self.latestSessionAt = latestSessionAt
+        self.curveVersion = curveVersion
+        self.rebuiltAt = rebuiltAt
+    }
+}
+
+/// The single local Character identity. Progression values are never stored
+/// here because they are derived from authoritative completed sessions.
+@Model
+final class CharacterProfile {
+    @Attribute(.unique) var id: String
+    var displayName: String
+    var crestSymbolName: String
+    var accentHex: String
+    var equippedTitleID: String?
+    var pathReviewCompletedAt: Date?
+    var progressionCurveVersion: Int
+    var createdAt: Date
+
+    init(
+        id: String = "primary-character",
+        displayName: String = "The Practitioner",
+        crestSymbolName: String = "person.fill",
+        accentHex: String = "D2A84A",
+        equippedTitleID: String? = nil,
+        pathReviewCompletedAt: Date? = nil,
+        progressionCurveVersion: Int = 1,
+        createdAt: Date = .now
+    ) {
+        self.id = id
+        self.displayName = displayName
+        self.crestSymbolName = crestSymbolName
+        self.accentHex = accentHex
+        self.equippedTitleID = equippedTitleID
+        self.pathReviewCompletedAt = pathReviewCompletedAt
+        self.progressionCurveVersion = progressionCurveVersion
+        self.createdAt = createdAt
+    }
+}
+
+/// Append-only evidence for an earned, equipable Character title.
+@Model
+final class CharacterTitleUnlock {
+    @Attribute(.unique) var id: String
+    var title: String
+    var titleDescription: String
+    var systemImage: String
+    var sourceRawValue: String
+    var pathRawValue: String?
+    var skillID: UUID?
+    var unlockedAt: Date
+    var triggeringSessionID: UUID?
+
+    init(
+        id: String,
+        title: String,
+        titleDescription: String,
+        systemImage: String,
+        sourceRawValue: String,
+        pathRawValue: String? = nil,
+        skillID: UUID? = nil,
+        unlockedAt: Date,
+        triggeringSessionID: UUID? = nil
+    ) {
+        self.id = id
+        self.title = title
+        self.titleDescription = titleDescription
+        self.systemImage = systemImage
+        self.sourceRawValue = sourceRawValue
+        self.pathRawValue = pathRawValue
+        self.skillID = skillID
+        self.unlockedAt = unlockedAt
+        self.triggeringSessionID = triggeringSessionID
+    }
+}
+
+/// A player-selected Level 75 undertaking. Progress is rebuildable from
+/// sessions while completion remains a permanent historical event.
+@Model
+final class ExpertChallenge {
+    @Attribute(.unique) var id: UUID
+    var skillID: UUID
+    var kindRawValue: String
+    var title: String
+    var challengeDescription: String
+    var systemImage: String
+    var targetValue: Int
+    var currentValue: Int
+    var startedAt: Date
+    var endsAt: Date
+    var completedAt: Date?
+    var triggeringSessionID: UUID?
+    var retiredAt: Date?
+
+    init(
+        id: UUID = UUID(),
+        skillID: UUID,
+        kindRawValue: String,
+        title: String,
+        challengeDescription: String,
+        systemImage: String,
+        targetValue: Int,
+        currentValue: Int = 0,
+        startedAt: Date = .now,
+        endsAt: Date,
+        completedAt: Date? = nil,
+        triggeringSessionID: UUID? = nil,
+        retiredAt: Date? = nil
+    ) {
+        self.id = id
+        self.skillID = skillID
+        self.kindRawValue = kindRawValue
+        self.title = title
+        self.challengeDescription = challengeDescription
+        self.systemImage = systemImage
+        self.targetValue = max(1, targetValue)
+        self.currentValue = max(0, currentValue)
+        self.startedAt = startedAt
+        self.endsAt = endsAt
+        self.completedAt = completedAt
+        self.triggeringSessionID = triggeringSessionID
+        self.retiredAt = retiredAt
+    }
+}
+
+/// Identity-only Level 100 customization. Legacy never modifies XP, Quest
+/// rewards, or the deterministic progression curve.
+@Model
+final class SkillLegacy {
+    @Attribute(.unique) var skillID: UUID
+    var masterTitle: String
+    var crestSymbolName: String
+    var chosenAt: Date
+
+    init(
+        skillID: UUID,
+        masterTitle: String,
+        crestSymbolName: String,
+        chosenAt: Date = .now
+    ) {
+        self.skillID = skillID
+        self.masterTitle = masterTitle
+        self.crestSymbolName = crestSymbolName
+        self.chosenAt = chosenAt
     }
 }
 

@@ -8,7 +8,7 @@ struct SkillingTimeApp: App {
     @StateObject private var notificationManager = ProgressionNotificationManager()
 
     private let modelContainer: ModelContainer = {
-        let schema = Schema(versionedSchema: SkillingTimeSchemaV4.self)
+        let schema = Schema(versionedSchema: SkillingTimeSchemaV5.self)
 
         // Keep the legacy store configuration name so upgrades from Skillbook
         // retain all existing SwiftData history after the Skilling Time rebrand.
