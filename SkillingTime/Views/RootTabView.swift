@@ -93,6 +93,11 @@ struct RootTabView: View {
                 preparationFailures.append("Daily activity ledger: \(error.localizedDescription)")
             }
             do {
+                try CharacterProgressionService.prepare(in: modelContext)
+            } catch {
+                preparationFailures.append("Character Paths: \(error.localizedDescription)")
+            }
+            do {
                 _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
             } catch {
                 preparationFailures.append("Questboard: \(error.localizedDescription)")
