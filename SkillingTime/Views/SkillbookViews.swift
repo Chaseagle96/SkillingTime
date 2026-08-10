@@ -346,6 +346,7 @@ private struct SkillIdentitySections: View {
     @Binding var category: String
     @Binding var selectedSymbol: String
     @Binding var selectedColor: String
+    @Binding var selectedPath: CharacterPath
 
     var body: some View {
         Section("Preview") {
@@ -375,6 +376,19 @@ private struct SkillIdentitySections: View {
                 .textInputAutocapitalization(.words)
             TextField("Category", text: $category)
                 .textInputAutocapitalization(.words)
+        }
+
+        Section {
+            Picker("Path", selection: $selectedPath) {
+                ForEach(CharacterPath.allCases) { path in
+                    Label(path.title, systemImage: path.systemImage)
+                        .tag(path)
+                }
+            }
+        } header: {
+            Text("Character Path")
+        } footer: {
+            Text(selectedPath.description)
         }
 
         Section("Glyph") {
@@ -456,6 +470,7 @@ struct CreateSkillView: View {
     @State private var category = "Personal"
     @State private var selectedSymbol = "sparkles"
     @State private var selectedColor = "D97A43"
+    @State private var selectedPath = CharacterPath.stewardship
     @State private var saveError: String?
 
     var body: some View {
@@ -465,7 +480,8 @@ struct CreateSkillView: View {
                     name: $name,
                     category: $category,
                     selectedSymbol: $selectedSymbol,
-                    selectedColor: $selectedColor
+                    selectedColor: $selectedColor,
+                    selectedPath: $selectedPath
                 )
 
                 if let saveError {
@@ -502,6 +518,11 @@ struct CreateSkillView: View {
             sortOrder: nextSortOrder
         )
         modelContext.insert(skill)
+        CharacterProgressionService.recordInitialAssignment(
+            skill: skill,
+            path: selectedPath,
+            in: modelContext
+        )
 
         do {
             try modelContext.save()
@@ -513,6 +534,8 @@ struct CreateSkillView: View {
 
         do {
             try RewardBackfillService.reconcileAll(in: modelContext)
+            try CharacterProgressionService.prepare(in: modelContext)
+            _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
             dismiss()
         } catch {
             saveError = "The Skill was saved, but its global reward history could not be refreshed yet. \(error.localizedDescription)"
@@ -531,11 +554,13 @@ struct EditSkillView: View {
     @EnvironmentObject private var sessionController: SessionController
 
     let skill: LifeSkill
+    @Query private var pathAssignments: [SkillPathAssignment]
 
     @State private var name: String
     @State private var category: String
     @State private var selectedSymbol: String
     @State private var selectedColor: String
+    @State private var selectedPath: CharacterPath
     @State private var isArchived: Bool
     @State private var saveError: String?
 
@@ -545,7 +570,15 @@ struct EditSkillView: View {
         _category = State(initialValue: skill.category)
         _selectedSymbol = State(initialValue: skill.symbolName)
         _selectedColor = State(initialValue: skill.accentHex)
+        _selectedPath = State(initialValue: CharacterProgressionEngine.suggestedPath(for: skill))
         _isArchived = State(initialValue: skill.isArchived)
+        let skillID = skill.id
+        _pathAssignments = Query(
+            filter: #Predicate<SkillPathAssignment> { assignment in
+                assignment.skillID == skillID
+            },
+            sort: \SkillPathAssignment.effectiveFrom
+        )
     }
 
     var body: some View {
@@ -555,7 +588,8 @@ struct EditSkillView: View {
                     name: $name,
                     category: $category,
                     selectedSymbol: $selectedSymbol,
-                    selectedColor: $selectedColor
+                    selectedColor: $selectedColor,
+                    selectedPath: $selectedPath
                 )
 
                 Section {
@@ -589,6 +623,12 @@ struct EditSkillView: View {
                         )
                 }
             }
+            .task {
+                selectedPath = CharacterProgressionEngine.currentPath(
+                    for: skill.id,
+                    assignments: pathAssignments
+                ) ?? CharacterProgressionEngine.suggestedPath(for: skill)
+            }
         }
     }
 
@@ -599,9 +639,16 @@ struct EditSkillView: View {
         skill.symbolName = selectedSymbol
         skill.accentHex = selectedColor
         skill.isArchived = isArchived
+        CharacterProgressionService.changePath(
+            skill: skill,
+            to: selectedPath,
+            assignments: pathAssignments,
+            in: modelContext
+        )
 
         do {
             try modelContext.save()
+            try CharacterProgressionService.prepare(in: modelContext)
             dismiss()
         } catch {
             modelContext.rollback()
