@@ -4,11 +4,15 @@ import SwiftData
 enum SkillCapability: String, Hashable, Sendable {
     case focusGoals
     case specialization
+    case expertChallenge
+    case legacy
 
     var title: String {
         switch self {
         case .focusGoals: "Focus Goals"
         case .specialization: "Specialization"
+        case .expertChallenge: "Expert Challenges"
+        case .legacy: "Legacy"
         }
     }
 
@@ -18,6 +22,10 @@ enum SkillCapability: String, Hashable, Sendable {
             "Set a duration, XP, or progression target before beginning this Skill."
         case .specialization:
             "Give this Skill a custom identity without changing its XP or progression."
+        case .expertChallenge:
+            "Undertake a substantial 30-day challenge in this Expert Skill."
+        case .legacy:
+            "Create a permanent Master title and crest for this Skill."
         }
     }
 }
@@ -37,6 +45,9 @@ struct SessionOutcome: Identifiable, Sendable {
     let achievementsUnlocked: [AchievementDefinition]
     let questsCompleted: [QuestStatus]
     let personalRecords: [PersonalRecordReveal]
+    let pathProgress: CharacterPathProgressOutcome?
+    let characterTitlesUnlocked: [CharacterTitleReveal]
+    let expertChallengesCompleted: [ExpertChallengeReveal]
     let capabilitiesUnlocked: [SkillCapability]
     let focusGoalResult: FocusGoalProgress?
     let note: String
@@ -125,10 +136,22 @@ enum SessionCommitService {
             let previousRewardIdentifiers = Set(
                 achievementRecords.map(\.id) + chronicleRecords.map(\.id)
             )
+            _ = try CharacterProgressionService.reconcile(
+                skills: skills,
+                beforeSessions: beforeSessions,
+                afterSessions: beforeSessions,
+                triggeringSession: nil,
+                in: modelContext,
+                now: draft.endedAt
+            )
+            let pathAssignments = try modelContext.fetch(
+                FetchDescriptor<SkillPathAssignment>()
+            )
             QuestBoardService.ensureCurrentAssignments(
                 assignments: &questAssignments,
                 skills: skills,
                 sessions: beforeSessions,
+                pathAssignments: pathAssignments,
                 in: modelContext,
                 now: draft.endedAt
             )
@@ -136,6 +159,7 @@ enum SessionCommitService {
                 assignments: questAssignments,
                 skills: skills,
                 sessions: beforeSessions,
+                pathAssignments: pathAssignments,
                 triggeringSessionID: nil,
                 now: now
             )
@@ -204,7 +228,16 @@ enum SessionCommitService {
                 assignments: questAssignments,
                 skills: skills,
                 sessions: afterSessions,
+                pathAssignments: pathAssignments,
                 triggeringSessionID: committedSession.id,
+                now: now
+            )
+            let characterOutcome = try CharacterProgressionService.reconcile(
+                skills: skills,
+                beforeSessions: beforeSessions,
+                afterSessions: afterSessions,
+                triggeringSession: committedSession,
+                in: modelContext,
                 now: now
             )
             let recordReveals = wasAlreadyCommitted ? [] : PersonalRecordEngine.newRecords(
@@ -229,6 +262,7 @@ enum SessionCommitService {
                 previousRewardIdentifiers: previousRewardIdentifiers,
                 questsCompleted: completedQuests,
                 personalRecords: newPersonalRecords,
+                characterOutcome: wasAlreadyCommitted ? .empty : characterOutcome,
                 focusGoal: draft.focusGoal,
                 wasAlreadyCommitted: wasAlreadyCommitted
             )
@@ -310,6 +344,7 @@ enum SessionCommitService {
             let ledgers = try modelContext.fetch(FetchDescriptor<SkillLedger>())
             let dayLedgers = try modelContext.fetch(FetchDescriptor<ActivityDayLedger>())
             let questAssignments = try modelContext.fetch(FetchDescriptor<QuestAssignment>())
+            let pathAssignments = try modelContext.fetch(FetchDescriptor<SkillPathAssignment>())
             let existingRewardIdentifiers = Set(
                 achievementRecords.map(\.id) + chronicleRecords.map(\.id)
             )
@@ -368,7 +403,15 @@ enum SessionCommitService {
                 assignments: questAssignments,
                 skills: skills,
                 sessions: sessions,
+                pathAssignments: pathAssignments,
                 triggeringSessionID: nil
+            )
+            _ = try CharacterProgressionService.reconcile(
+                skills: skills,
+                beforeSessions: sessions,
+                afterSessions: sessions,
+                triggeringSession: nil,
+                in: modelContext
             )
             try modelContext.save()
             return impact
@@ -394,6 +437,7 @@ enum SessionCommitService {
             let ledgers = try modelContext.fetch(FetchDescriptor<SkillLedger>())
             let dayLedgers = try modelContext.fetch(FetchDescriptor<ActivityDayLedger>())
             let questAssignments = try modelContext.fetch(FetchDescriptor<QuestAssignment>())
+            let pathAssignments = try modelContext.fetch(FetchDescriptor<SkillPathAssignment>())
             let existingRewardIdentifiers = Set(
                 achievementRecords.map(\.id) + chronicleRecords.map(\.id)
             )
@@ -429,7 +473,15 @@ enum SessionCommitService {
                 assignments: questAssignments,
                 skills: skills,
                 sessions: remainingSessions,
+                pathAssignments: pathAssignments,
                 triggeringSessionID: nil
+            )
+            _ = try CharacterProgressionService.reconcile(
+                skills: skills,
+                beforeSessions: sessions,
+                afterSessions: remainingSessions,
+                triggeringSession: nil,
+                in: modelContext
             )
             try modelContext.save()
             return impact
@@ -460,6 +512,7 @@ enum SessionCommitService {
         previousRewardIdentifiers: Set<String>,
         questsCompleted: [QuestStatus],
         personalRecords: [PersonalRecordReveal],
+        characterOutcome: CharacterReconciliationOutcome,
         focusGoal: SessionFocusGoal?,
         wasAlreadyCommitted: Bool
     ) -> SessionOutcome {
@@ -494,6 +547,8 @@ enum SessionCommitService {
             switch entry.level {
             case 25: .focusGoals
             case 50: .specialization
+            case 75: .expertChallenge
+            case 100: .legacy
             default: nil
             }
         }
@@ -524,6 +579,13 @@ enum SessionCommitService {
             achievementsUnlocked: wasAlreadyCommitted ? [] : achievements,
             questsCompleted: wasAlreadyCommitted ? [] : questsCompleted,
             personalRecords: wasAlreadyCommitted ? [] : personalRecords,
+            pathProgress: wasAlreadyCommitted ? nil : characterOutcome.pathProgress,
+            characterTitlesUnlocked: wasAlreadyCommitted
+                ? []
+                : characterOutcome.titlesUnlocked,
+            expertChallengesCompleted: wasAlreadyCommitted
+                ? []
+                : characterOutcome.expertChallengesCompleted,
             capabilitiesUnlocked: wasAlreadyCommitted ? [] : capabilities,
             focusGoalResult: goalResult,
             note: session.note,
