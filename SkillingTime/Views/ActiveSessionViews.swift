@@ -577,6 +577,7 @@ struct SessionSummaryView: View {
                 }
 
                 levelResult
+                characterPathResult
                 focusGoalResult
                 unlockedRewards
 
@@ -659,6 +660,37 @@ struct SessionSummaryView: View {
     }
 
     @ViewBuilder
+    private var characterPathResult: some View {
+        if let path = outcome.pathProgress {
+            VStack(spacing: 8) {
+                Image(systemName: path.path.systemImage)
+                    .font(.title2)
+                    .foregroundStyle(Color(hex: path.path.accentHex))
+                Text("\(path.path.title.uppercased()) PATH")
+                    .font(.caption.weight(.bold))
+                    .tracking(1)
+                Text("+\(DurationText.compact(path.secondsEarned))")
+                    .font(.headline)
+                if path.levelsGained > 0 {
+                    Text("Level \(path.startingProgress.level) → \(path.endingProgress.level)")
+                        .font(.subheadline.weight(.semibold))
+                        .foregroundStyle(SkillingTimeTheme.success)
+                } else {
+                    ProgressView(value: path.endingProgress.fractionComplete)
+                        .tint(Color(hex: path.path.accentHex))
+                }
+            }
+            .padding(16)
+            .frame(maxWidth: .infinity)
+            .background(
+                Color(hex: path.path.accentHex).opacity(0.08),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+            .accessibilityElement(children: .combine)
+        }
+    }
+
+    @ViewBuilder
     private var focusGoalResult: some View {
         if let goal = outcome.focusGoalResult {
             VStack(spacing: 8) {
@@ -691,6 +723,8 @@ struct SessionSummaryView: View {
         if !outcome.achievementsUnlocked.isEmpty
             || !outcome.questsCompleted.isEmpty
             || !outcome.personalRecords.isEmpty
+            || !outcome.characterTitlesUnlocked.isEmpty
+            || !outcome.expertChallengesCompleted.isEmpty
             || !outcome.capabilitiesUnlocked.isEmpty {
             VStack(spacing: 12) {
                 ForEach(outcome.achievementsUnlocked) { achievement in
@@ -720,6 +754,26 @@ struct SessionSummaryView: View {
                         description: record.description,
                         systemImage: record.systemImage,
                         tint: Color(hex: outcome.accentHex)
+                    )
+                }
+
+                ForEach(outcome.expertChallengesCompleted) { challenge in
+                    RewardRevealCard(
+                        eyebrow: "EXPERT CHALLENGE COMPLETE",
+                        title: challenge.title,
+                        description: challenge.description,
+                        systemImage: challenge.systemImage,
+                        tint: SkillingTimeTheme.gold
+                    )
+                }
+
+                ForEach(outcome.characterTitlesUnlocked) { title in
+                    RewardRevealCard(
+                        eyebrow: "CHARACTER TITLE EARNED",
+                        title: title.title,
+                        description: title.description,
+                        systemImage: title.systemImage,
+                        tint: Color(hex: outcome.pathProgress?.path.accentHex ?? outcome.accentHex)
                     )
                 }
 
