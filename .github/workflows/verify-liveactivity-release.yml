@@ -1,0 +1,89 @@
+name: Verify Skilling Time Live Activity Release
+
+on:
+  push:
+    branches: [verify-liveactivity-release]
+  workflow_dispatch:
+
+permissions:
+  contents: write
+
+jobs:
+  verify:
+    runs-on: macos-26
+    timeout-minutes: 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Download released IPA and checksum
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          mkdir -p verify-input
+          gh release download v0.3.1-liveactivity --repo "$GITHUB_REPOSITORY" \
+            --pattern 'SkillingTime-v0.3.1-LiveActivity.ipa' \
+            --pattern 'SkillingTime-v0.3.1-LiveActivity.ipa.sha256' \
+            --dir verify-input
+          test -f verify-input/SkillingTime-v0.3.1-LiveActivity.ipa
+          test -f verify-input/SkillingTime-v0.3.1-LiveActivity.ipa.sha256
+          (cd verify-input && shasum -a 256 -c SkillingTime-v0.3.1-LiveActivity.ipa.sha256)
+
+      - name: Independently inspect IPA archive
+        shell: bash
+        run: |
+          set -euxo pipefail
+          IPA="$GITHUB_WORKSPACE/verify-input/SkillingTime-v0.3.1-LiveActivity.ipa"
+          OUT="$GITHUB_WORKSPACE/verification-report.txt"
+          VERIFY="$RUNNER_TEMP/independent-ipa-verify"
+          rm -rf "$VERIFY"; mkdir -p "$VERIFY"
+          unzip -t "$IPA" | tee "$OUT"
+          unzip -l "$IPA" | tee -a "$OUT"
+          unzip -l "$IPA" | grep -F 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/' | tee -a "$OUT"
+          unzip -l "$IPA" | grep -F 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/SkillingTimeWidgets' | tee -a "$OUT"
+          unzip -q "$IPA" -d "$VERIFY"
+          APP="$VERIFY/Payload/SkillingTime.app"
+          EXT="$APP/PlugIns/SkillingTimeWidgets.appex"
+          test -d "$APP"; test -d "$EXT"
+          test -f "$APP/SkillingTime"; test -f "$EXT/SkillingTimeWidgets"
+          plutil -lint "$APP/Info.plist" | tee -a "$OUT"
+          plutil -lint "$EXT/Info.plist" | tee -a "$OUT"
+          echo "NSSupportsLiveActivities=$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist")" | tee -a "$OUT"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist")" = true
+          EXTPOINT=$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist")
+          echo "NSExtensionPointIdentifier=$EXTPOINT" | tee -a "$OUT"
+          test "$EXTPOINT" = 'com.apple.widgetkit-extension'
+          file "$APP/SkillingTime" | tee -a "$OUT"
+          file "$EXT/SkillingTimeWidgets" | tee -a "$OUT"
+          lipo -info "$APP/SkillingTime" | tee -a "$OUT"
+          lipo -info "$EXT/SkillingTimeWidgets" | tee -a "$OUT"
+          otool -hv "$APP/SkillingTime" | tee -a "$OUT"
+          otool -hv "$EXT/SkillingTimeWidgets" | tee -a "$OUT"
+          file "$APP/SkillingTime" | grep -q 'Mach-O'
+          file "$EXT/SkillingTimeWidgets" | grep -q 'Mach-O'
+          lipo -info "$APP/SkillingTime" | grep -q arm64
+          lipo -info "$EXT/SkillingTimeWidgets" | grep -q arm64
+          SHA=$(shasum -a 256 "$IPA" | awk '{print $1}')
+          echo "IPA_SHA256=$SHA" | tee -a "$OUT"
+          echo 'APPEX_PATH=Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex' | tee -a "$OUT"
+          echo 'INDEPENDENT_VALIDATION=PASS' | tee -a "$OUT"
+          cp verify-input/SkillingTime-v0.3.1-LiveActivity.ipa.sha256 "$GITHUB_WORKSPACE/verified.sha256"
+
+      - name: Publish independently verified release
+        env:
+          GH_TOKEN: ${{ github.token }}
+        shell: bash
+        run: |
+          set -euxo pipefail
+          TAG='v0.3.1-liveactivity-verified'
+          if ! gh release view "$TAG" --repo "$GITHUB_REPOSITORY" >/dev/null 2>&1; then
+            gh release create "$TAG" --repo "$GITHUB_REPOSITORY" --target main \
+              --title 'Skilling Time v0.3.1 Live Activity — Independently Verified' \
+              --notes 'Fresh macOS validation of the released Apple-SDK iPhoneOS IPA: embedded WidgetKit appex, Live Activities plist key, WidgetKit extension metadata, Mach-O arm64 executables, archive integrity, and SHA-256 all passed.' --prerelease
+          fi
+          gh release upload "$TAG" \
+            verify-input/SkillingTime-v0.3.1-LiveActivity.ipa \
+            verify-input/SkillingTime-v0.3.1-LiveActivity.ipa.sha256 \
+            verification-report.txt \
+            --repo "$GITHUB_REPOSITORY" --clobber
