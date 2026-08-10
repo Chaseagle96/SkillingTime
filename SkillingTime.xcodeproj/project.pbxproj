@@ -1,0 +1,774 @@
+// !$*UTF8*$!
+{
+	archiveVersion = 1;
+	classes = {
+	};
+	objectVersion = 56;
+	objects = {
+
+/* Begin PBXBuildFile section */
+		300000000000000000000001 /* SkillingTimeApp.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000001 /* SkillingTimeApp.swift */; };
+		300000000000000000000002 /* AppModels.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000002 /* AppModels.swift */; };
+		300000000000000000000003 /* ChronicleContent.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000003 /* ChronicleContent.swift */; };
+		300000000000000000000004 /* ProgressionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* ProgressionEngine.swift */; };
+		300000000000000000000005 /* SessionController.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000005 /* SessionController.swift */; };
+		300000000000000000000006 /* SessionAnalytics.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000006 /* SessionAnalytics.swift */; };
+		300000000000000000000007 /* AchievementEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000007 /* AchievementEngine.swift */; };
+		300000000000000000000008 /* QuestEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000008 /* QuestEngine.swift */; };
+		300000000000000000000009 /* SkillingTimeTheme.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000009 /* SkillingTimeTheme.swift */; };
+		30000000000000000000000A /* Components.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000A /* Components.swift */; };
+		30000000000000000000000B /* RootTabView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000B /* RootTabView.swift */; };
+		30000000000000000000000C /* SkillbookViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000C /* SkillbookViews.swift */; };
+		30000000000000000000000D /* SkillDetailView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000D /* SkillDetailView.swift */; };
+		30000000000000000000000E /* ActiveSessionViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000E /* ActiveSessionViews.swift */; };
+		30000000000000000000000F /* ChronicleViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000000F /* ChronicleViews.swift */; };
+		300000000000000000000010 /* QuestViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000010 /* QuestViews.swift */; };
+		300000000000000000000011 /* CharacterView.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000011 /* CharacterView.swift */; };
+		300000000000000000000012 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000012 /* Assets.xcassets */; };
+		300000000000000000000013 /* ProgressionEngineTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000013 /* ProgressionEngineTests.swift */; };
+		300000000000000000000014 /* SchemaVersioning.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000015 /* SchemaVersioning.swift */; };
+		300000000000000000000015 /* RewardResolver.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000016 /* RewardResolver.swift */; };
+		300000000000000000000016 /* SessionCommitService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000017 /* SessionCommitService.swift */; };
+		300000000000000000000017 /* SkillLedgerService.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000018 /* SkillLedgerService.swift */; };
+		300000000000000000000018 /* SessionSharedStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* SessionSharedStorage.swift */; };
+		300000000000000000000019 /* SkillingTimeActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001A /* SkillingTimeActivityAttributes.swift */; };
+		30000000000000000000001A /* SkillingTimeLiveActivityIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* SkillingTimeLiveActivityIntents.swift */; };
+		30000000000000000000001B /* LiveActivityCoordinator.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001C /* LiveActivityCoordinator.swift */; };
+		30000000000000000000001C /* ProgressionNotificationManager.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001D /* ProgressionNotificationManager.swift */; };
+		30000000000000000000001D /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000022 /* PrivacyInfo.xcprivacy */; };
+		310000000000000000000001 /* SkillingTimeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000001 /* SkillingTimeWidgetBundle.swift */; };
+		310000000000000000000002 /* SkillingTimeLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000002 /* SkillingTimeLiveActivityWidget.swift */; };
+		310000000000000000000003 /* SessionSharedStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* SessionSharedStorage.swift */; };
+		310000000000000000000004 /* SkillingTimeActivityAttributes.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001A /* SkillingTimeActivityAttributes.swift */; };
+		310000000000000000000005 /* SkillingTimeLiveActivityIntents.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000001B /* SkillingTimeLiveActivityIntents.swift */; };
+		310000000000000000000006 /* ProgressionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* ProgressionEngine.swift */; };
+		310000000000000000000007 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000005 /* PrivacyInfo.xcprivacy */; };
+		320000000000000000000001 /* SkillingTimeWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 210000000000000000000010 /* SkillingTimeWidgets.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+/* End PBXBuildFile section */
+
+/* Begin PBXContainerItemProxy section */
+		A00000000000000000000030 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000010;
+			remoteInfo = SkillingTime;
+		};
+		A00000000000000000000032 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000040;
+			remoteInfo = SkillingTimeWidgets;
+		};
+/* End PBXContainerItemProxy section */
+
+/* Begin PBXCopyFilesBuildPhase section */
+		A00000000000000000000017 /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				320000000000000000000001 /* SkillingTimeWidgets.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXCopyFilesBuildPhase section */
+
+/* Begin PBXFileReference section */
+		200000000000000000000001 /* SkillingTimeApp.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeApp.swift; sourceTree = "<group>"; };
+		200000000000000000000002 /* AppModels.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppModels.swift; sourceTree = "<group>"; };
+		200000000000000000000003 /* ChronicleContent.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChronicleContent.swift; sourceTree = "<group>"; };
+		200000000000000000000004 /* ProgressionEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionEngine.swift; sourceTree = "<group>"; };
+		200000000000000000000005 /* SessionController.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionController.swift; sourceTree = "<group>"; };
+		200000000000000000000006 /* SessionAnalytics.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionAnalytics.swift; sourceTree = "<group>"; };
+		200000000000000000000007 /* AchievementEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AchievementEngine.swift; sourceTree = "<group>"; };
+		200000000000000000000008 /* QuestEngine.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestEngine.swift; sourceTree = "<group>"; };
+		200000000000000000000009 /* SkillingTimeTheme.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeTheme.swift; sourceTree = "<group>"; };
+		20000000000000000000000A /* Components.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = Components.swift; sourceTree = "<group>"; };
+		20000000000000000000000B /* RootTabView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RootTabView.swift; sourceTree = "<group>"; };
+		20000000000000000000000C /* SkillbookViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillbookViews.swift; sourceTree = "<group>"; };
+		20000000000000000000000D /* SkillDetailView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillDetailView.swift; sourceTree = "<group>"; };
+		20000000000000000000000E /* ActiveSessionViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ActiveSessionViews.swift; sourceTree = "<group>"; };
+		20000000000000000000000F /* ChronicleViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ChronicleViews.swift; sourceTree = "<group>"; };
+		200000000000000000000010 /* QuestViews.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = QuestViews.swift; sourceTree = "<group>"; };
+		200000000000000000000011 /* CharacterView.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = CharacterView.swift; sourceTree = "<group>"; };
+		200000000000000000000012 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
+		200000000000000000000013 /* ProgressionEngineTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionEngineTests.swift; sourceTree = "<group>"; };
+		200000000000000000000014 /* README.md */ = {isa = PBXFileReference; lastKnownFileType = net.daringfireball.markdown; path = README.md; sourceTree = "<group>"; };
+		200000000000000000000015 /* SchemaVersioning.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SchemaVersioning.swift; sourceTree = "<group>"; };
+		200000000000000000000016 /* RewardResolver.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = RewardResolver.swift; sourceTree = "<group>"; };
+		200000000000000000000017 /* SessionCommitService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionCommitService.swift; sourceTree = "<group>"; };
+		200000000000000000000018 /* SkillLedgerService.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillLedgerService.swift; sourceTree = "<group>"; };
+		200000000000000000000019 /* SessionSharedStorage.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SessionSharedStorage.swift; sourceTree = "<group>"; };
+		20000000000000000000001A /* SkillingTimeActivityAttributes.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeActivityAttributes.swift; sourceTree = "<group>"; };
+		20000000000000000000001B /* SkillingTimeLiveActivityIntents.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeLiveActivityIntents.swift; sourceTree = "<group>"; };
+		20000000000000000000001C /* LiveActivityCoordinator.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = LiveActivityCoordinator.swift; sourceTree = "<group>"; };
+		20000000000000000000001D /* ProgressionNotificationManager.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = ProgressionNotificationManager.swift; sourceTree = "<group>"; };
+		20000000000000000000001E /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		20000000000000000000001F /* SkillingTime.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SkillingTime.entitlements; sourceTree = "<group>"; };
+		200000000000000000000022 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		210000000000000000000001 /* SkillingTimeWidgetBundle.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeWidgetBundle.swift; sourceTree = "<group>"; };
+		210000000000000000000002 /* SkillingTimeLiveActivityWidget.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeLiveActivityWidget.swift; sourceTree = "<group>"; };
+		210000000000000000000003 /* Info.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = Info.plist; sourceTree = "<group>"; };
+		210000000000000000000004 /* SkillingTimeWidgets.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SkillingTimeWidgets.entitlements; sourceTree = "<group>"; };
+		210000000000000000000005 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		200000000000000000000020 /* SkillingTime.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SkillingTime.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		200000000000000000000021 /* SkillingTimeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkillingTimeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
+		210000000000000000000010 /* SkillingTimeWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SkillingTimeWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
+/* End PBXFileReference section */
+
+/* Begin PBXFrameworksBuildPhase section */
+		A00000000000000000000015 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000016 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000019 /* Frameworks */ = {
+			isa = PBXFrameworksBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXFrameworksBuildPhase section */
+
+/* Begin PBXGroup section */
+		A00000000000000000000002 = {
+			isa = PBXGroup;
+			children = (
+				A00000000000000000000004 /* SkillingTime */,
+				A0000000000000000000000B /* SkillingTimeWidgets */,
+				A00000000000000000000009 /* SkillingTimeTests */,
+				200000000000000000000014 /* README.md */,
+				A00000000000000000000003 /* Products */,
+			);
+			sourceTree = "<group>";
+		};
+		A00000000000000000000003 /* Products */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000020 /* SkillingTime.app */,
+				210000000000000000000010 /* SkillingTimeWidgets.appex */,
+				200000000000000000000021 /* SkillingTimeTests.xctest */,
+			);
+			name = Products;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000004 /* SkillingTime */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000001 /* SkillingTimeApp.swift */,
+				20000000000000000000001E /* Info.plist */,
+				20000000000000000000001F /* SkillingTime.entitlements */,
+				200000000000000000000022 /* PrivacyInfo.xcprivacy */,
+				A00000000000000000000005 /* Models */,
+				A00000000000000000000006 /* Engine */,
+				A0000000000000000000000A /* Shared */,
+				A00000000000000000000007 /* Theme */,
+				A00000000000000000000008 /* Views */,
+				200000000000000000000012 /* Assets.xcassets */,
+			);
+			path = SkillingTime;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000005 /* Models */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000002 /* AppModels.swift */,
+				200000000000000000000003 /* ChronicleContent.swift */,
+				200000000000000000000015 /* SchemaVersioning.swift */,
+			);
+			path = Models;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000006 /* Engine */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000004 /* ProgressionEngine.swift */,
+				200000000000000000000005 /* SessionController.swift */,
+				200000000000000000000006 /* SessionAnalytics.swift */,
+				200000000000000000000007 /* AchievementEngine.swift */,
+				200000000000000000000008 /* QuestEngine.swift */,
+				200000000000000000000016 /* RewardResolver.swift */,
+				200000000000000000000017 /* SessionCommitService.swift */,
+				200000000000000000000018 /* SkillLedgerService.swift */,
+				20000000000000000000001C /* LiveActivityCoordinator.swift */,
+				20000000000000000000001D /* ProgressionNotificationManager.swift */,
+			);
+			path = Engine;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000007 /* Theme */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000009 /* SkillingTimeTheme.swift */,
+			);
+			path = Theme;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000008 /* Views */ = {
+			isa = PBXGroup;
+			children = (
+				20000000000000000000000A /* Components.swift */,
+				20000000000000000000000B /* RootTabView.swift */,
+				20000000000000000000000C /* SkillbookViews.swift */,
+				20000000000000000000000D /* SkillDetailView.swift */,
+				20000000000000000000000E /* ActiveSessionViews.swift */,
+				20000000000000000000000F /* ChronicleViews.swift */,
+				200000000000000000000010 /* QuestViews.swift */,
+				200000000000000000000011 /* CharacterView.swift */,
+			);
+			path = Views;
+			sourceTree = "<group>";
+		};
+		A00000000000000000000009 /* SkillingTimeTests */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000013 /* ProgressionEngineTests.swift */,
+			);
+			path = SkillingTimeTests;
+			sourceTree = "<group>";
+		};
+		A0000000000000000000000A /* Shared */ = {
+			isa = PBXGroup;
+			children = (
+				200000000000000000000019 /* SessionSharedStorage.swift */,
+				20000000000000000000001A /* SkillingTimeActivityAttributes.swift */,
+				20000000000000000000001B /* SkillingTimeLiveActivityIntents.swift */,
+			);
+			path = Shared;
+			sourceTree = "<group>";
+		};
+		A0000000000000000000000B /* SkillingTimeWidgets */ = {
+			isa = PBXGroup;
+			children = (
+				210000000000000000000001 /* SkillingTimeWidgetBundle.swift */,
+				210000000000000000000002 /* SkillingTimeLiveActivityWidget.swift */,
+				210000000000000000000003 /* Info.plist */,
+				210000000000000000000004 /* SkillingTimeWidgets.entitlements */,
+				210000000000000000000005 /* PrivacyInfo.xcprivacy */,
+			);
+			path = SkillingTimeWidgets;
+			sourceTree = "<group>";
+		};
+/* End PBXGroup section */
+
+/* Begin PBXNativeTarget section */
+		A00000000000000000000010 /* SkillingTime */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000021 /* Build configuration list for PBXNativeTarget "SkillingTime" */;
+			buildPhases = (
+				A00000000000000000000012 /* Sources */,
+				A00000000000000000000015 /* Frameworks */,
+				A00000000000000000000014 /* Resources */,
+				A00000000000000000000017 /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000033 /* PBXTargetDependency */,
+			);
+			name = SkillingTime;
+			productName = SkillingTime;
+			productReference = 200000000000000000000020 /* SkillingTime.app */;
+			productType = "com.apple.product-type.application";
+		};
+		A00000000000000000000011 /* SkillingTimeTests */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000022 /* Build configuration list for PBXNativeTarget "SkillingTimeTests" */;
+			buildPhases = (
+				A00000000000000000000013 /* Sources */,
+				A00000000000000000000016 /* Frameworks */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000031 /* PBXTargetDependency */,
+			);
+			name = SkillingTimeTests;
+			productName = SkillingTimeTests;
+			productReference = 200000000000000000000021 /* SkillingTimeTests.xctest */;
+			productType = "com.apple.product-type.bundle.unit-test";
+		};
+		A00000000000000000000040 /* SkillingTimeWidgets */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000023 /* Build configuration list for PBXNativeTarget "SkillingTimeWidgets" */;
+			buildPhases = (
+				A00000000000000000000018 /* Sources */,
+				A00000000000000000000019 /* Frameworks */,
+				A0000000000000000000001A /* Resources */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+			);
+			name = SkillingTimeWidgets;
+			productName = SkillingTimeWidgets;
+			productReference = 210000000000000000000010 /* SkillingTimeWidgets.appex */;
+			productType = "com.apple.product-type.app-extension";
+		};
+/* End PBXNativeTarget section */
+
+/* Begin PBXProject section */
+		A00000000000000000000001 /* Project object */ = {
+			isa = PBXProject;
+			attributes = {
+				BuildIndependentTargetsInParallel = 1;
+				LastSwiftUpdateCheck = 1600;
+				LastUpgradeCheck = 1600;
+				TargetAttributes = {
+					A00000000000000000000010 = {
+						CreatedOnToolsVersion = 16.0;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
+					};
+					A00000000000000000000011 = {
+						CreatedOnToolsVersion = 16.0;
+						TestTargetID = A00000000000000000000010;
+					};
+					A00000000000000000000040 = {
+						CreatedOnToolsVersion = 16.0;
+						SystemCapabilities = {
+							com.apple.ApplicationGroups.iOS = {
+								enabled = 1;
+							};
+						};
+					};
+				};
+			};
+			buildConfigurationList = A00000000000000000000020 /* Build configuration list for PBXProject "SkillingTime" */;
+			compatibilityVersion = "Xcode 14.0";
+			developmentRegion = en;
+			hasScannedForEncodings = 0;
+			knownRegions = (
+				en,
+				Base,
+			);
+			mainGroup = A00000000000000000000002;
+			productRefGroup = A00000000000000000000003 /* Products */;
+			projectDirPath = "";
+			projectRoot = "";
+			targets = (
+				A00000000000000000000010 /* SkillingTime */,
+				A00000000000000000000040 /* SkillingTimeWidgets */,
+				A00000000000000000000011 /* SkillingTimeTests */,
+			);
+		};
+/* End PBXProject section */
+
+/* Begin PBXResourcesBuildPhase section */
+		A00000000000000000000014 /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				300000000000000000000012 /* Assets.xcassets in Resources */,
+				30000000000000000000001D /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0000000000000000000001A /* Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				310000000000000000000007 /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXResourcesBuildPhase section */
+
+/* Begin PBXSourcesBuildPhase section */
+		A00000000000000000000012 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				300000000000000000000001 /* SkillingTimeApp.swift in Sources */,
+				300000000000000000000002 /* AppModels.swift in Sources */,
+				300000000000000000000003 /* ChronicleContent.swift in Sources */,
+				300000000000000000000004 /* ProgressionEngine.swift in Sources */,
+				300000000000000000000005 /* SessionController.swift in Sources */,
+				300000000000000000000006 /* SessionAnalytics.swift in Sources */,
+				300000000000000000000007 /* AchievementEngine.swift in Sources */,
+				300000000000000000000008 /* QuestEngine.swift in Sources */,
+				300000000000000000000009 /* SkillingTimeTheme.swift in Sources */,
+				30000000000000000000000A /* Components.swift in Sources */,
+				30000000000000000000000B /* RootTabView.swift in Sources */,
+				30000000000000000000000C /* SkillbookViews.swift in Sources */,
+				30000000000000000000000D /* SkillDetailView.swift in Sources */,
+				30000000000000000000000E /* ActiveSessionViews.swift in Sources */,
+				30000000000000000000000F /* ChronicleViews.swift in Sources */,
+				300000000000000000000010 /* QuestViews.swift in Sources */,
+				300000000000000000000011 /* CharacterView.swift in Sources */,
+				300000000000000000000014 /* SchemaVersioning.swift in Sources */,
+				300000000000000000000015 /* RewardResolver.swift in Sources */,
+				300000000000000000000016 /* SessionCommitService.swift in Sources */,
+				300000000000000000000017 /* SkillLedgerService.swift in Sources */,
+				300000000000000000000018 /* SessionSharedStorage.swift in Sources */,
+				300000000000000000000019 /* SkillingTimeActivityAttributes.swift in Sources */,
+				30000000000000000000001A /* SkillingTimeLiveActivityIntents.swift in Sources */,
+				30000000000000000000001B /* LiveActivityCoordinator.swift in Sources */,
+				30000000000000000000001C /* ProgressionNotificationManager.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000013 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				300000000000000000000013 /* ProgressionEngineTests.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A00000000000000000000018 /* Sources */ = {
+			isa = PBXSourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				310000000000000000000001 /* SkillingTimeWidgetBundle.swift in Sources */,
+				310000000000000000000002 /* SkillingTimeLiveActivityWidget.swift in Sources */,
+				310000000000000000000003 /* SessionSharedStorage.swift in Sources */,
+				310000000000000000000004 /* SkillingTimeActivityAttributes.swift in Sources */,
+				310000000000000000000005 /* SkillingTimeLiveActivityIntents.swift in Sources */,
+				310000000000000000000006 /* ProgressionEngine.swift in Sources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+/* End PBXSourcesBuildPhase section */
+
+/* Begin PBXTargetDependency section */
+		A00000000000000000000031 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000010 /* SkillingTime */;
+			targetProxy = A00000000000000000000030 /* PBXContainerItemProxy */;
+		};
+		A00000000000000000000033 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000040 /* SkillingTimeWidgets */;
+			targetProxy = A00000000000000000000032 /* PBXContainerItemProxy */;
+		};
+/* End PBXTargetDependency section */
+
+/* Begin XCBuildConfiguration section */
+		400000000000000000000001 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = dwarf;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_TESTABILITY = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_DYNAMIC_NO_PIC = NO;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_OPTIMIZATION_LEVEL = 0;
+				GCC_PREPROCESSOR_DEFINITIONS = (
+					"DEBUG=1",
+					"$(inherited)",
+				);
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = INCLUDE_SOURCE;
+				MTL_FAST_MATH = YES;
+				ONLY_ACTIVE_ARCH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_ACTIVE_COMPILATION_CONDITIONS = "DEBUG $(inherited)";
+				SWIFT_OPTIMIZATION_LEVEL = "-Onone";
+			};
+			name = Debug;
+		};
+		400000000000000000000002 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ALWAYS_SEARCH_USER_PATHS = NO;
+				CLANG_ANALYZER_NONNULL = YES;
+				CLANG_ANALYZER_NUMBER_OBJECT_CONVERSION = YES_AGGRESSIVE;
+				CLANG_CXX_LANGUAGE_STANDARD = "gnu++20";
+				CLANG_ENABLE_MODULES = YES;
+				CLANG_ENABLE_OBJC_ARC = YES;
+				CLANG_WARN_BLOCK_CAPTURE_AUTORELEASING = YES;
+				CLANG_WARN_BOOL_CONVERSION = YES;
+				CLANG_WARN_COMMA = YES;
+				CLANG_WARN_CONSTANT_CONVERSION = YES;
+				CLANG_WARN_DEPRECATED_OBJC_IMPLEMENTATIONS = YES;
+				CLANG_WARN_DIRECT_OBJC_ISA_USAGE = YES_ERROR;
+				CLANG_WARN_DOCUMENTATION_COMMENTS = YES;
+				CLANG_WARN_EMPTY_BODY = YES;
+				CLANG_WARN_ENUM_CONVERSION = YES;
+				CLANG_WARN_INFINITE_RECURSION = YES;
+				CLANG_WARN_INT_CONVERSION = YES;
+				CLANG_WARN_NON_LITERAL_NULL_CONVERSION = YES;
+				CLANG_WARN_OBJC_IMPLICIT_RETAIN_SELF = YES;
+				CLANG_WARN_OBJC_LITERAL_CONVERSION = YES;
+				CLANG_WARN_OBJC_ROOT_CLASS = YES_ERROR;
+				CLANG_WARN_QUOTED_INCLUDE_IN_FRAMEWORK_HEADER = YES;
+				CLANG_WARN_RANGE_LOOP_ANALYSIS = YES;
+				CLANG_WARN_STRICT_PROTOTYPES = YES;
+				CLANG_WARN_SUSPICIOUS_MOVE = YES;
+				CLANG_WARN_UNGUARDED_AVAILABILITY = YES_AGGRESSIVE;
+				CLANG_WARN_UNREACHABLE_CODE = YES;
+				CLANG_WARN__DUPLICATE_METHOD_MATCH = YES;
+				COPY_PHASE_STRIP = NO;
+				DEBUG_INFORMATION_FORMAT = "dwarf-with-dsym";
+				ENABLE_NS_ASSERTIONS = NO;
+				ENABLE_STRICT_OBJC_MSGSEND = YES;
+				ENABLE_USER_SCRIPT_SANDBOXING = YES;
+				GCC_C_LANGUAGE_STANDARD = gnu17;
+				GCC_NO_COMMON_BLOCKS = YES;
+				GCC_WARN_64_TO_32_BIT_CONVERSION = YES;
+				GCC_WARN_ABOUT_RETURN_TYPE = YES_ERROR;
+				GCC_WARN_UNDECLARED_SELECTOR = YES;
+				GCC_WARN_UNINITIALIZED_AUTOS = YES_AGGRESSIVE;
+				GCC_WARN_UNUSED_FUNCTION = YES;
+				GCC_WARN_UNUSED_VARIABLE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LOCALIZATION_PREFERS_STRING_CATALOGS = YES;
+				MTL_ENABLE_DEBUG_INFO = NO;
+				MTL_FAST_MATH = YES;
+				SDKROOT = iphoneos;
+				SWIFT_COMPILATION_MODE = wholemodule;
+				VALIDATE_PRODUCT = YES;
+			};
+			name = Release;
+		};
+		400000000000000000000003 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SkillingTime/SkillingTime.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SkillingTime/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SkillingTime;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		400000000000000000000004 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
+				CODE_SIGN_ENTITLEMENTS = SkillingTime/SkillingTime.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				DEVELOPMENT_ASSET_PATHS = "";
+				ENABLE_PREVIEWS = YES;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SkillingTime/Info.plist;
+				INFOPLIST_KEY_CFBundleDisplayName = SkillingTime;
+				INFOPLIST_KEY_UIApplicationSceneManifest_Generation = YES;
+				INFOPLIST_KEY_UIApplicationSupportsIndirectInputEvents = YES;
+				INFOPLIST_KEY_UILaunchScreen_Generation = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+				);
+				MARKETING_VERSION = 0.3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+		400000000000000000000005 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SkillingTime.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SkillingTime";
+			};
+			name = Debug;
+		};
+		400000000000000000000006 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				BUNDLE_LOADER = "$(TEST_HOST)";
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				GENERATE_INFOPLIST_FILE = YES;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				MARKETING_VERSION = 0.3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.tests;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = NO;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+				TEST_HOST = "$(BUILT_PRODUCTS_DIR)/SkillingTime.app/$(BUNDLE_EXECUTABLE_FOLDER_PATH)/SkillingTime";
+			};
+			name = Release;
+		};
+		400000000000000000000007 /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SkillingTimeWidgets/SkillingTimeWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SkillingTimeWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.SkillingTimeWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Debug;
+		};
+		400000000000000000000008 /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				APPLICATION_EXTENSION_API_ONLY = YES;
+				CODE_SIGN_ENTITLEMENTS = SkillingTimeWidgets/SkillingTimeWidgets.entitlements;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 4;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SkillingTimeWidgets/Info.plist;
+				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
+				LD_RUNPATH_SEARCH_PATHS = (
+					"$(inherited)",
+					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
+				);
+				MARKETING_VERSION = 0.3.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.SkillingTimeWidgets;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "iphoneos iphonesimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = "1,2";
+			};
+			name = Release;
+		};
+/* End XCBuildConfiguration section */
+
+/* Begin XCConfigurationList section */
+		A00000000000000000000020 /* Build configuration list for PBXProject "SkillingTime" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				400000000000000000000001 /* Debug */,
+				400000000000000000000002 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000021 /* Build configuration list for PBXNativeTarget "SkillingTime" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				400000000000000000000003 /* Debug */,
+				400000000000000000000004 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000022 /* Build configuration list for PBXNativeTarget "SkillingTimeTests" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				400000000000000000000005 /* Debug */,
+				400000000000000000000006 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000023 /* Build configuration list for PBXNativeTarget "SkillingTimeWidgets" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				400000000000000000000007 /* Debug */,
+				400000000000000000000008 /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+/* End XCConfigurationList section */
+	};
+	rootObject = A00000000000000000000001 /* Project object */;
+}

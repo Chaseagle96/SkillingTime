@@ -1,0 +1,4 @@
+/Users/runner/work/SkillingTime/SkillingTime/DerivedData/Build/Products/Release-iphoneos/SkillingTime.app/SkillingTime:
+Mach header
+      magic  cputype cpusubtype  caps    filetype ncmds sizeofcmds      flags
+MH_MAGIC_64    ARM64        ALL  0x00     EXECUTE    48       5768   NOUNDEFS DYLDLINK TWOLEVEL PIE
