@@ -3,6 +3,7 @@ import SwiftUI
 
 struct SkillbookView: View {
     @Environment(\.modelContext) private var modelContext
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var sessionController: SessionController
     @Query(sort: \LifeSkill.sortOrder) private var allSkills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
@@ -12,6 +13,7 @@ struct SkillbookView: View {
     @State private var showingRetiredSkills = false
     @State private var editingSkill: LifeSkill?
     @State private var persistenceError: String?
+    @Namespace private var skillTransition
 
     private let columns = [
         GridItem(.flexible(), spacing: 12),
@@ -27,18 +29,19 @@ struct SkillbookView: View {
     }
 
     var body: some View {
-        let index = SessionAnalytics.index(ledgers: ledgers)
+        let sessionIndex = SessionAnalytics.index(ledgers: ledgers)
         let lifetimeTotalLevel = SessionAnalytics.totalLevel(
             skills: allSkills,
-            index: index
+            index: sessionIndex
         )
 
         ScrollView {
             VStack(spacing: 18) {
                 characterHeader(
-                    index: index,
+                    index: sessionIndex,
                     lifetimeTotalLevel: lifetimeTotalLevel
                 )
+                .skillingTimeReveal(order: 0)
 
                 if activeSkills.isEmpty {
                     EmptyStateCard(
@@ -50,47 +53,17 @@ struct SkillbookView: View {
                     )
                 } else {
                     LazyVGrid(columns: columns, spacing: 12) {
-                        ForEach(activeSkills) { skill in
-                            NavigationLink {
-                                SkillDetailView(skill: skill)
-                            } label: {
-                                SkillCard(
-                                    skill: skill,
-                                    totalSeconds: index.statistics(for: skill.id).totalSeconds,
-                                    specializationTitle: specializations.first {
-                                        $0.skillID == skill.id
-                                    }?.title
-                                )
-                            }
-                            .buttonStyle(.plain)
-                            .contextMenu {
-                                Button {
-                                    editingSkill = skill
-                                } label: {
-                                    Label("Edit Skill", systemImage: "pencil")
-                                }
-
-                                Button {
-                                    move(skill, offset: -1)
-                                } label: {
-                                    Label("Move Earlier", systemImage: "arrow.up")
-                                }
-                                .disabled(activeSkills.first?.id == skill.id)
-
-                                Button {
-                                    move(skill, offset: 1)
-                                } label: {
-                                    Label("Move Later", systemImage: "arrow.down")
-                                }
-                                .disabled(activeSkills.last?.id == skill.id)
-
-                                Button(role: .destructive) {
-                                    archive(skill)
-                                } label: {
-                                    Label("Retire Skill", systemImage: "archivebox")
-                                }
-                                .disabled(sessionController.activeSession?.skillID == skill.id)
-                            }
+                        ForEach(
+                            Array(activeSkills.enumerated()),
+                            id: \.element.id
+                        ) { position, skill in
+                            skillNavigationLink(
+                                skill,
+                                totalSeconds: sessionIndex
+                                    .statistics(for: skill.id)
+                                    .totalSeconds,
+                                revealOrder: position + 1
+                            )
                         }
                     }
                 }
@@ -144,6 +117,80 @@ struct SkillbookView: View {
             Text(persistenceError ?? "The requested Skill change could not be saved.")
         }
         .skillingTimeScreenBackground()
+    }
+
+    @ViewBuilder
+    private func skillNavigationLink(
+        _ skill: LifeSkill,
+        totalSeconds: Int,
+        revealOrder: Int
+    ) -> some View {
+        if #available(iOS 18.0, *), !reduceMotion {
+            NavigationLink {
+                SkillDetailView(skill: skill)
+                    .navigationTransition(
+                        .zoom(sourceID: skill.id, in: skillTransition)
+                    )
+            } label: {
+                skillCard(skill, totalSeconds: totalSeconds)
+            }
+            .matchedTransitionSource(id: skill.id, in: skillTransition)
+            .buttonStyle(SkillingTimePressStyle())
+            .contextMenu { skillContextMenu(skill) }
+            .skillingTimeReveal(order: revealOrder)
+        } else {
+            NavigationLink {
+                SkillDetailView(skill: skill)
+            } label: {
+                skillCard(skill, totalSeconds: totalSeconds)
+            }
+            .buttonStyle(SkillingTimePressStyle())
+            .contextMenu { skillContextMenu(skill) }
+            .skillingTimeReveal(order: revealOrder)
+        }
+    }
+
+    private func skillCard(
+        _ skill: LifeSkill,
+        totalSeconds: Int
+    ) -> some View {
+        SkillCard(
+            skill: skill,
+            totalSeconds: totalSeconds,
+            specializationTitle: specializations.first {
+                $0.skillID == skill.id
+            }?.title
+        )
+    }
+
+    @ViewBuilder
+    private func skillContextMenu(_ skill: LifeSkill) -> some View {
+        Button {
+            editingSkill = skill
+        } label: {
+            Label("Edit Skill", systemImage: "pencil")
+        }
+
+        Button {
+            move(skill, offset: -1)
+        } label: {
+            Label("Move Earlier", systemImage: "arrow.up")
+        }
+        .disabled(activeSkills.first?.id == skill.id)
+
+        Button {
+            move(skill, offset: 1)
+        } label: {
+            Label("Move Later", systemImage: "arrow.down")
+        }
+        .disabled(activeSkills.last?.id == skill.id)
+
+        Button(role: .destructive) {
+            archive(skill)
+        } label: {
+            Label("Retire Skill", systemImage: "archivebox")
+        }
+        .disabled(sessionController.activeSession?.skillID == skill.id)
     }
 
     private func characterHeader(
@@ -202,10 +249,18 @@ struct SkillbookView: View {
         guard let index = reordered.firstIndex(where: { $0.id == skill.id }) else { return }
         let destination = index + offset
         guard reordered.indices.contains(destination) else { return }
-        reordered.swapAt(index, destination)
-        for (sortOrder, item) in reordered.enumerated() {
-            item.sortOrder = sortOrder
+        withAnimation(
+            SkillingTimeMotion.animation(
+                SkillingTimeMotion.responsive,
+                reduceMotion: reduceMotion
+            )
+        ) {
+            reordered.swapAt(index, destination)
+            for (sortOrder, item) in reordered.enumerated() {
+                item.sortOrder = sortOrder
+            }
         }
+        Haptics.selection()
         saveSkillChanges()
     }
 
@@ -214,7 +269,15 @@ struct SkillbookView: View {
             persistenceError = "Finish or discard the active session before retiring this Skill."
             return
         }
-        skill.isArchived = true
+        withAnimation(
+            SkillingTimeMotion.animation(
+                SkillingTimeMotion.responsive,
+                reduceMotion: reduceMotion
+            )
+        ) {
+            skill.isArchived = true
+        }
+        Haptics.selection()
         saveSkillChanges()
     }
 
@@ -258,6 +321,7 @@ private struct SkillCard: View {
                 VStack(alignment: .trailing, spacing: 0) {
                     Text(progress.level.formatted())
                         .font(.system(.title2, design: .rounded, weight: .bold))
+                        .contentTransition(.numericText())
                     Text("LEVEL")
                         .font(.caption2.weight(.bold))
                         .tracking(0.7)

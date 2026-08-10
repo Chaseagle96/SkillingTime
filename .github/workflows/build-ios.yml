@@ -12,12 +12,12 @@ permissions:
 
 jobs:
   build:
-    name: Test, build, and validate Character IPA
+    name: Test, build, and validate Awakening IPA
     runs-on: macos-26
     timeout-minutes: 45
 
     env:
-      IPA_NAME: SkillingTime-v0.5.0-The-Character.ipa
+      IPA_NAME: SkillingTime-v0.5.1-The-Awakening.ipa
 
     steps:
       - name: Checkout
@@ -49,7 +49,7 @@ jobs:
             -destination 'generic/platform=iOS' \
             -showBuildSettings | tee "$RUNNER_TEMP/build-settings.txt"
 
-      - name: Run progression, Character, Questboard, and migration tests
+      - name: Run progression, Character, Questboard, motion, and migration tests
         run: |
           set -euxo pipefail
           DEVICE_ID=$(python3 - <<'PY'
@@ -121,6 +121,11 @@ jobs:
           LIVE_VALUE=$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$APP/Info.plist")
           test "$LIVE_VALUE" = "true" || { echo "ERROR: NSSupportsLiveActivities is not true: $LIVE_VALUE"; exit 1; }
 
+          LAUNCH_COLOR=$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$APP/Info.plist")
+          LAUNCH_IMAGE=$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIImageName' "$APP/Info.plist")
+          test "$LAUNCH_COLOR" = "LaunchBackground" || { echo "ERROR: unexpected launch color: $LAUNCH_COLOR"; exit 1; }
+          test "$LAUNCH_IMAGE" = "LaunchMark" || { echo "ERROR: unexpected launch image: $LAUNCH_IMAGE"; exit 1; }
+
           EXT_POINT=$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$EXT/Info.plist")
           test "$EXT_POINT" = "com.apple.widgetkit-extension" || { echo "ERROR: unexpected extension point: $EXT_POINT"; exit 1; }
 
@@ -145,6 +150,8 @@ jobs:
             echo "App: $APP"
             echo "Extension: $EXT"
             echo "NSSupportsLiveActivities: $LIVE_VALUE"
+            echo "Launch color asset: $LAUNCH_COLOR"
+            echo "Launch image asset: $LAUNCH_IMAGE"
             echo "NSExtensionPointIdentifier: $EXT_POINT"
             echo "Main executable: $MAIN_FILE"
             echo "Widget executable: $EXT_FILE"
@@ -189,6 +196,8 @@ jobs:
           plutil -lint "$IPA_APP/Info.plist"
           plutil -lint "$IPA_EXT/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$IPA_APP/Info.plist")" = "true"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$IPA_APP/Info.plist")" = "LaunchBackground"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIImageName' "$IPA_APP/Info.plist")" = "LaunchMark"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$IPA_EXT/Info.plist")" = "com.apple.widgetkit-extension"
           file "$IPA_APP/SkillingTime" | grep -q 'Mach-O'
           file "$IPA_EXT/SkillingTimeWidgets" | grep -q 'Mach-O'
@@ -196,16 +205,16 @@ jobs:
           lipo -archs "$IPA_EXT/SkillingTimeWidgets" | grep -qw arm64
 
           shasum -a 256 "$IPA_NAME" | tee "$IPA_NAME.sha256"
-          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.5.0-The-Character-validation.txt
+          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.5.1-The-Awakening-validation.txt
 
       - name: Upload validated IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SkillingTime-v0.5.0-The-Character
+          name: SkillingTime-v0.5.1-The-Awakening
           path: |
-            SkillingTime-v0.5.0-The-Character.ipa
-            SkillingTime-v0.5.0-The-Character.ipa.sha256
-            SkillingTime-v0.5.0-The-Character-validation.txt
+            SkillingTime-v0.5.1-The-Awakening.ipa
+            SkillingTime-v0.5.1-The-Awakening.ipa.sha256
+            SkillingTime-v0.5.1-The-Awakening-validation.txt
           if-no-files-found: error
           retention-days: 30
 

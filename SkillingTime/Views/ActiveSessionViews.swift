@@ -137,12 +137,29 @@ struct ActiveSessionView: View {
                 VStack(spacing: 26) {
                     Spacer(minLength: 26)
 
-                    SkillGlyph(
-                        symbolName: skill.symbolName,
-                        color: Color(hex: skill.accentHex),
-                        size: 96,
-                        rank: progress.rank
-                    )
+                    ZStack {
+                        Circle()
+                            .fill(
+                                RadialGradient(
+                                    colors: [
+                                        Color(hex: skill.accentHex).opacity(0.18),
+                                        Color.clear
+                                    ],
+                                    center: .center,
+                                    startRadius: 8,
+                                    endRadius: 78
+                                )
+                            )
+                            .frame(width: 156, height: 156)
+
+                        SkillGlyph(
+                            symbolName: skill.symbolName,
+                            color: Color(hex: skill.accentHex),
+                            size: 96,
+                            rank: progress.rank
+                        )
+                    }
+                    .skillingTimeReveal(order: 0)
 
                     VStack(spacing: 7) {
                         Text(skill.name.uppercased())
@@ -162,8 +179,10 @@ struct ActiveSessionView: View {
                             .foregroundStyle(SkillingTimeTheme.gold)
                             .contentTransition(.numericText())
                     }
+                    .skillingTimeReveal(order: 1)
 
                     progressionCard(skill: skill, progress: progress)
+                        .skillingTimeReveal(order: 2)
 
                     if let goal = snapshot.focusGoal {
                         focusGoalCard(
@@ -174,6 +193,7 @@ struct ActiveSessionView: View {
                             ),
                             accent: Color(hex: skill.accentHex)
                         )
+                        .skillingTimeReveal(order: 3)
                     }
 
                     HStack(spacing: 14) {
@@ -208,6 +228,7 @@ struct ActiveSessionView: View {
                         .buttonStyle(.borderedProminent)
                         .tint(Color(hex: skill.accentHex))
                     }
+                    .skillingTimeReveal(order: 4)
 
                     if snapshot.isAwaitingCommit {
                         Label(
@@ -267,10 +288,6 @@ struct ActiveSessionView: View {
                 accent: Color(hex: skill.accentHex),
                 height: 14
             )
-            .animation(
-                reduceMotion ? nil : .easeOut(duration: 0.35),
-                value: progress.fractionComplete
-            )
 
             HStack {
                 Text("\(progress.currentLevelXP.formatted()) XP")
@@ -301,6 +318,7 @@ struct ActiveSessionView: View {
                     .font(.caption.weight(.bold))
                     .tracking(0.8)
                     .foregroundStyle(goal.isComplete ? SkillingTimeTheme.success : accent)
+                    .contentTransition(.symbolEffect(.replace))
                 Spacer()
                 if goal.isComplete {
                     Text("COMPLETE")
@@ -358,7 +376,14 @@ struct ActiveSessionView: View {
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_600_000_000)
             if levelBanner?.level == newLevel {
-                withAnimation { levelBanner = nil }
+                withAnimation(
+                    SkillingTimeMotion.animation(
+                        SkillingTimeMotion.quick,
+                        reduceMotion: reduceMotion
+                    )
+                ) {
+                    levelBanner = nil
+                }
             }
         }
     }
@@ -557,6 +582,8 @@ struct SessionSummaryView: View {
     let outcome: SessionOutcome
     let done: () -> Void
 
+    @State private var revealStarted = false
+
     private var accent: Color { Color(hex: outcome.accentHex) }
 
     var body: some View {
@@ -564,21 +591,30 @@ struct SessionSummaryView: View {
             VStack(spacing: 22) {
                 if outcome.chroniclesUnlocked.isEmpty {
                     standardSummary
+                        .skillingTimeReveal(order: 0, trigger: revealStarted)
                 } else {
-                    ForEach(outcome.chroniclesUnlocked) { entry in
+                    ForEach(
+                        Array(outcome.chroniclesUnlocked.enumerated()),
+                        id: \.element.id
+                    ) { index, entry in
                         MilestoneCeremonyCard(
                             skillName: outcome.skillName,
                             symbolName: outcome.symbolName,
                             accent: accent,
                             entry: entry
                         )
+                        .skillingTimeReveal(order: index, trigger: revealStarted)
                     }
                     sessionFacts
+                        .skillingTimeReveal(order: 1, trigger: revealStarted)
                 }
 
                 levelResult
+                    .skillingTimeReveal(order: 2, trigger: revealStarted)
                 characterPathResult
+                    .skillingTimeReveal(order: 3, trigger: revealStarted)
                 focusGoalResult
+                    .skillingTimeReveal(order: 4, trigger: revealStarted)
                 unlockedRewards
 
                 if outcome.wasAlreadyCommitted {
@@ -598,6 +634,7 @@ struct SessionSummaryView: View {
                     .padding(.vertical, 14)
                     .buttonStyle(.borderedProminent)
                     .tint(accent)
+                    .skillingTimeReveal(order: 10, trigger: revealStarted)
             }
             .padding(20)
         }
@@ -605,8 +642,12 @@ struct SessionSummaryView: View {
         .navigationBarTitleDisplayMode(.inline)
         .skillingTimeScreenBackground()
         .onAppear {
+            revealStarted = true
             if !outcome.chroniclesUnlocked.isEmpty {
                 Haptics.levelUp(major: true)
+            } else if !outcome.characterTitlesUnlocked.isEmpty
+                || !outcome.expertChallengesCompleted.isEmpty {
+                Haptics.rewardReveal()
             }
         }
     }
@@ -727,7 +768,10 @@ struct SessionSummaryView: View {
             || !outcome.expertChallengesCompleted.isEmpty
             || !outcome.capabilitiesUnlocked.isEmpty {
             VStack(spacing: 12) {
-                ForEach(outcome.achievementsUnlocked) { achievement in
+                ForEach(
+                    Array(outcome.achievementsUnlocked.enumerated()),
+                    id: \.element.id
+                ) { index, achievement in
                     RewardRevealCard(
                         eyebrow: "ACHIEVEMENT UNLOCKED",
                         title: achievement.title,
@@ -735,9 +779,13 @@ struct SessionSummaryView: View {
                         systemImage: achievement.systemImage,
                         tint: SkillingTimeTheme.gold
                     )
+                    .skillingTimeReveal(order: 5 + index, trigger: revealStarted)
                 }
 
-                ForEach(outcome.questsCompleted) { quest in
+                ForEach(
+                    Array(outcome.questsCompleted.enumerated()),
+                    id: \.element.id
+                ) { index, quest in
                     RewardRevealCard(
                         eyebrow: "QUEST COMPLETE",
                         title: quest.title,
@@ -745,9 +793,13 @@ struct SessionSummaryView: View {
                         systemImage: quest.systemImage,
                         tint: SkillingTimeTheme.success
                     )
+                    .skillingTimeReveal(order: 6 + index, trigger: revealStarted)
                 }
 
-                ForEach(outcome.personalRecords) { record in
+                ForEach(
+                    Array(outcome.personalRecords.enumerated()),
+                    id: \.element.id
+                ) { index, record in
                     RewardRevealCard(
                         eyebrow: "NEW PERSONAL BEST",
                         title: record.title,
@@ -755,9 +807,13 @@ struct SessionSummaryView: View {
                         systemImage: record.systemImage,
                         tint: Color(hex: outcome.accentHex)
                     )
+                    .skillingTimeReveal(order: 7 + index, trigger: revealStarted)
                 }
 
-                ForEach(outcome.expertChallengesCompleted) { challenge in
+                ForEach(
+                    Array(outcome.expertChallengesCompleted.enumerated()),
+                    id: \.element.id
+                ) { index, challenge in
                     RewardRevealCard(
                         eyebrow: "EXPERT CHALLENGE COMPLETE",
                         title: challenge.title,
@@ -765,9 +821,13 @@ struct SessionSummaryView: View {
                         systemImage: challenge.systemImage,
                         tint: SkillingTimeTheme.gold
                     )
+                    .skillingTimeReveal(order: 8 + index, trigger: revealStarted)
                 }
 
-                ForEach(outcome.characterTitlesUnlocked) { title in
+                ForEach(
+                    Array(outcome.characterTitlesUnlocked.enumerated()),
+                    id: \.element.id
+                ) { index, title in
                     RewardRevealCard(
                         eyebrow: "CHARACTER TITLE EARNED",
                         title: title.title,
@@ -775,9 +835,13 @@ struct SessionSummaryView: View {
                         systemImage: title.systemImage,
                         tint: Color(hex: outcome.pathProgress?.path.accentHex ?? outcome.accentHex)
                     )
+                    .skillingTimeReveal(order: 9 + index, trigger: revealStarted)
                 }
 
-                ForEach(outcome.capabilitiesUnlocked, id: \.rawValue) { capability in
+                ForEach(
+                    Array(outcome.capabilitiesUnlocked.enumerated()),
+                    id: \.element.rawValue
+                ) { index, capability in
                     RewardRevealCard(
                         eyebrow: "NEW ABILITY",
                         title: capability.title,
@@ -785,6 +849,7 @@ struct SessionSummaryView: View {
                         systemImage: "wand.and.stars",
                         tint: accent
                     )
+                    .skillingTimeReveal(order: 10 + index, trigger: revealStarted)
                 }
             }
         }

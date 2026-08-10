@@ -1,8 +1,22 @@
-# Skilling Time 0.5: The Character
+# Skilling Time 0.5.1: The Awakening
 
-Skilling Time is a native, local-first iOS app that turns real activity into persistent RPG-style Skills. Version 0.5 turns the lifetime summary into an earned Character build while preserving the core rule that completed time is authoritative.
+Skilling Time is a native, local-first iOS app that turns real activity into persistent RPG-style Skills. Version 0.5.1 gives the complete experience a deliberate motion language while preserving the data-integrity and Character systems introduced in 0.5.
 
-## What is new in 0.5
+## What is new in 0.5.1
+
+- A branded native launch screen now uses a dark system background and the Skilling Time hourglass crest instead of an empty launch configuration.
+- The first SwiftUI frame precisely continues that launch composition, then reveals the app without delaying initialization. The first launch is ceremonial; later cold launches are brief.
+- The app icon now carries the same hourglass, six Path colors, and gold-on-obsidian identity instead of the previous solid-color placeholder.
+- `SkillingTimeMotion` centralizes spring, progress, reveal, press, and ceremonial timing so animation behavior remains consistent.
+- Skills use tactile press feedback, staggered entry, and an iOS 18-or-newer zoom transition into their detail screen.
+- Today, Skillbook, Chronicle, Character, and Skill detail surfaces reveal according to visual hierarchy rather than appearing all at once.
+- XP, timers, metrics, Quest progress, Character Paths, and Expert Challenges animate between meaningful values.
+- Session entry now establishes the active Skill visually, and session rewards reveal in gameplay order.
+- Quest completion, session start, reward, selection, and milestone moments use restrained contextual haptics.
+- Reduce Motion removes spatial movement, long launch timing, card scaling, and stagger delays while preserving immediate state changes.
+- Motion policies are deterministic and unit tested. No animation changes progression, persistence, or session timing.
+
+## Character foundation from 0.5
 
 - Six stable Character Paths describe practice without pretending to measure innate ability: **Vigor**, **Insight**, **Craft**, **Expression**, **Care**, and **Stewardship**.
 - Every Skill has one effective-dated Path assignment. The first explicit review can classify existing history; later changes apply only to future sessions by default.
@@ -18,7 +32,7 @@ Skilling Time is a native, local-first iOS app that turns real activity into per
 - Progression-alert controls moved into Character Settings so the main Character screen remains focused on identity.
 - SwiftData schema v5 freezes the shipped v4 declarations, adds the Character models, and migrates v4 stores through an explicit lightweight stage.
 
-The Skill progression economy is unchanged: 20 XP per active minute under curve v1, Levels 1 through 100, unlimited Mastery stars, no Quest XP, and no Character-stat bonuses.
+The Skill progression economy remains unchanged: 20 XP per active minute under curve v1, Levels 1 through 100, unlimited Mastery stars, no Quest XP, and no Character-stat bonuses.
 
 ## Data boundaries
 
@@ -84,7 +98,8 @@ The suite covers:
 - Expert Challenge completion and title resolution
 - v3-to-v5 and on-disk v4-to-v5 migration with authoritative history preservation
 - Focus Goals, achievements, Chronicle rewards, personal records, notifications, and shared active-session storage
+- first-launch, returning-launch, Reduce Motion, and bounded stagger timing policies
 
 ## Intentionally deferred
 
-Version 0.5 does not add allocatable stats, XP multipliers, perks, currencies, equipment, inventory, shops, combat, random loot, social accounts, leaderboards, multiplayer, AI classification, monetization, or an Apple Watch app. Character progression describes completed behavior without inflating it.
+Version 0.5.1 does not add allocatable stats, XP multipliers, perks, currencies, equipment, inventory, shops, combat, random loot, social accounts, leaderboards, multiplayer, AI classification, monetization, or an Apple Watch app. Character progression describes completed behavior without inflating it.

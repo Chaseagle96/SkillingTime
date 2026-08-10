@@ -4,6 +4,7 @@ import SwiftUI
 struct RootTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var sessionController: SessionController
     @EnvironmentObject private var liveActivityCoordinator: LiveActivityCoordinator
     @EnvironmentObject private var notificationManager: ProgressionNotificationManager
@@ -56,7 +57,10 @@ struct RootTabView: View {
             }
         }
         .animation(
-            .spring(response: 0.35, dampingFraction: 0.86),
+            SkillingTimeMotion.animation(
+                SkillingTimeMotion.responsive,
+                reduceMotion: reduceMotion
+            ),
             value: sessionController.activeSession != nil
         )
         .fullScreenCover(isPresented: $showingActiveSession) {
@@ -68,6 +72,9 @@ struct RootTabView: View {
             if !isPresented {
                 presentedSkillID = nil
             }
+        }
+        .onChange(of: selectedTab) { _, _ in
+            Haptics.selection()
         }
         .onOpenURL(perform: handleDeepLink)
         .task {
@@ -232,7 +239,11 @@ struct RootTabView: View {
             sessionAccessory
                 .padding(.horizontal, 12)
                 .padding(.bottom, 54)
-                .transition(.move(edge: .bottom).combined(with: .opacity))
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .move(edge: .bottom).combined(with: .opacity)
+                )
         }
     }
 
@@ -439,9 +450,11 @@ private struct MiniSessionBar: View {
                         Text(DurationText.timer(seconds))
                             .font(.system(.subheadline, design: .monospaced, weight: .semibold))
                             .foregroundStyle(.primary)
+                            .contentTransition(.numericText())
                         Text("+\(max(0, liveXP - startingXP).formatted()) XP")
                             .font(.caption)
                             .foregroundStyle(SkillingTimeTheme.gold)
+                            .contentTransition(.numericText())
                     }
 
                     Image(systemName: "chevron.up")
@@ -467,7 +480,7 @@ private struct MiniSessionBar: View {
                     y: 5
                 )
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SkillingTimePressStyle())
             .accessibilityLabel("Active \(skill.name) session")
             .accessibilityValue(
                 "\(DurationText.compact(seconds)), \(snapshot.isPaused ? "paused" : "running")"
@@ -515,10 +528,11 @@ private struct NativeSessionAccessory: View {
                         ? "Review"
                         : snapshot.isPaused ? "Paused" : DurationText.timer(seconds))
                         .font(.system(.caption, design: .monospaced, weight: .semibold))
+                        .contentTransition(.numericText())
                 }
                 .contentShape(Rectangle())
             }
-            .buttonStyle(.plain)
+            .buttonStyle(SkillingTimePressStyle())
             .accessibilityLabel("Active \(skill.name) session")
             .accessibilityHint("Opens the active session")
         }

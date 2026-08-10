@@ -2,6 +2,8 @@ import SwiftData
 import SwiftUI
 
 struct ChronicleRootView: View {
+    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+
     @Query(sort: \LifeSkill.sortOrder) private var skills: [LifeSkill]
     @Query private var sessions: [SkillSession]
     @Query private var ledgers: [SkillLedger]
@@ -36,6 +38,13 @@ struct ChronicleRootView: View {
             }
         }
         .navigationTitle("Chronicle")
+        .animation(
+            SkillingTimeMotion.animation(
+                SkillingTimeMotion.responsive,
+                reduceMotion: reduceMotion
+            ),
+            value: selection
+        )
         .skillingTimeScreenBackground()
     }
 }
@@ -61,6 +70,7 @@ private struct ChronicleListView: View {
                     }
                     .frame(maxWidth: .infinity)
                 }
+                .skillingTimeReveal(order: 0)
 
                 if skills.isEmpty {
                     EmptyStateCard(
@@ -69,7 +79,10 @@ private struct ChronicleListView: View {
                         message: "Create a Skill to begin writing its Chronicle."
                     )
                 } else {
-                    ForEach(skills) { skill in
+                    ForEach(
+                        Array(skills.enumerated()),
+                        id: \.element.id
+                    ) { position, skill in
                         let skillUnlocks = unlocks.filter { $0.skillID == skill.id }
                         NavigationLink {
                             SkillChronicleView(
@@ -84,7 +97,8 @@ private struct ChronicleListView: View {
                                 unlockedChapterCount: skillUnlocks.count
                             )
                         }
-                        .buttonStyle(.plain)
+                        .buttonStyle(SkillingTimePressStyle())
+                        .skillingTimeReveal(order: position + 1)
                     }
                 }
             }
@@ -186,13 +200,18 @@ private struct SkillChronicleView: View {
                     Color.white.opacity(0.045),
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
+                .skillingTimeReveal(order: 0)
 
-                ForEach(ChronicleContent.entries) { entry in
+                ForEach(
+                    Array(ChronicleContent.entries.enumerated()),
+                    id: \.element.id
+                ) { index, entry in
                     ChronicleChapterCard(
                         skillName: skill.name,
                         entry: entry,
                         unlockedAt: unlocksByMilestone[entry.level]?.unlockedAt
                     )
+                    .skillingTimeReveal(order: index + 1)
                 }
             }
             .padding(16)
@@ -314,6 +333,7 @@ private struct AchievementGalleryView: View {
                     Color.white.opacity(0.045),
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
+                .skillingTimeReveal(order: 0)
 
                 Picker("Achievement scope", selection: $selectedSkillID) {
                     Text("Global").tag(Optional<UUID>.none)
@@ -325,11 +345,15 @@ private struct AchievementGalleryView: View {
                 .pickerStyle(.menu)
                 .frame(maxWidth: .infinity, alignment: .leading)
 
-                ForEach(statuses) { status in
+                ForEach(
+                    Array(statuses.enumerated()),
+                    id: \.element.id
+                ) { index, status in
                     AchievementRow(
                         status: status,
                         unlock: scopedUnlocks[status.id]
                     )
+                    .skillingTimeReveal(order: index + 1)
                 }
             }
             .padding(16)

@@ -1359,3 +1359,39 @@ final class ProgressionNotificationPlannerTests: XCTestCase {
         )
     }
 }
+
+final class MotionPolicyTests: XCTestCase {
+    func testFirstLaunchIsCeremonialAndReturningLaunchIsBrief() {
+        let first = LaunchMotionPlan.make(hasPlayed: false, reduceMotion: false)
+        let returning = LaunchMotionPlan.make(hasPlayed: true, reduceMotion: false)
+
+        XCTAssertTrue(first.usesSpatialMotion)
+        XCTAssertTrue(returning.usesSpatialMotion)
+        XCTAssertGreaterThan(
+            first.ignitionDelayNanoseconds
+                + first.wordmarkDelayNanoseconds
+                + first.dismissalDelayNanoseconds,
+            returning.ignitionDelayNanoseconds
+                + returning.wordmarkDelayNanoseconds
+                + returning.dismissalDelayNanoseconds
+        )
+    }
+
+    func testReduceMotionPlanRemovesSpatialMovementAndLongDelay() {
+        let plan = LaunchMotionPlan.make(hasPlayed: false, reduceMotion: true)
+
+        XCTAssertFalse(plan.usesSpatialMotion)
+        XCTAssertEqual(plan.ignitionDelayNanoseconds, 0)
+        XCTAssertEqual(plan.wordmarkDelayNanoseconds, 0)
+        XCTAssertEqual(plan.dismissalDelayNanoseconds, 80_000_000)
+    }
+
+    func testStaggeredRevealDelayIsBounded() {
+        XCTAssertEqual(SkillingTimeMotion.revealDelayNanoseconds(order: -2), 0)
+        XCTAssertEqual(SkillingTimeMotion.revealDelayNanoseconds(order: 3), 165_000_000)
+        XCTAssertEqual(
+            SkillingTimeMotion.revealDelayNanoseconds(order: 500),
+            SkillingTimeMotion.revealDelayNanoseconds(order: 10)
+        )
+    }
+}

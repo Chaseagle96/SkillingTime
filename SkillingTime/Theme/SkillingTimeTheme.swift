@@ -65,6 +65,18 @@ enum Haptics {
         UINotificationFeedbackGenerator().notificationOccurred(.success)
     }
 
+    static func sessionStart() {
+        UIImpactFeedbackGenerator(style: .soft).impactOccurred(intensity: 0.78)
+    }
+
+    static func questComplete() {
+        UINotificationFeedbackGenerator().notificationOccurred(.success)
+    }
+
+    static func rewardReveal() {
+        UIImpactFeedbackGenerator(style: .medium).impactOccurred(intensity: 0.72)
+    }
+
     static func levelUp(major: Bool) {
         if major {
             UINotificationFeedbackGenerator().notificationOccurred(.success)
