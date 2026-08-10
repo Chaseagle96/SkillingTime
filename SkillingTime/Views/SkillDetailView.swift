@@ -2,10 +2,13 @@ import SwiftData
 import SwiftUI
 
 struct SkillDetailView: View {
+    @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionController: SessionController
     @Query private var sessions: [SkillSession]
     @Query private var chronicleUnlocks: [ChronicleUnlock]
     @Query private var specializations: [SkillSpecialization]
+    @Query private var expertChallenges: [ExpertChallenge]
+    @Query private var legacies: [SkillLegacy]
 
     let skill: LifeSkill
 
@@ -14,6 +17,8 @@ struct SkillDetailView: View {
     @State private var showingFocusGoal = false
     @State private var showingEditSkill = false
     @State private var showingSpecialization = false
+    @State private var showingExpertChallenge = false
+    @State private var showingLegacy = false
     @State private var sessionOutcome: SessionOutcome?
     @State private var editingSession: SkillSession?
 
@@ -35,6 +40,18 @@ struct SkillDetailView: View {
         _specializations = Query(
             filter: #Predicate<SkillSpecialization> { specialization in
                 specialization.skillID == skillID
+            }
+        )
+        _expertChallenges = Query(
+            filter: #Predicate<ExpertChallenge> { challenge in
+                challenge.skillID == skillID
+            },
+            sort: \ExpertChallenge.startedAt,
+            order: .reverse
+        )
+        _legacies = Query(
+            filter: #Predicate<SkillLegacy> { legacy in
+                legacy.skillID == skillID
             }
         )
     }
@@ -66,6 +83,20 @@ struct SkillDetailView: View {
         progress.level >= 50 || chronicleUnlocks.contains { $0.milestoneLevel == 50 }
     }
 
+    private var hasExpertChallengeCapability: Bool {
+        progress.level >= 75 || chronicleUnlocks.contains { $0.milestoneLevel == 75 }
+    }
+
+    private var hasLegacyCapability: Bool {
+        progress.level >= 100 || chronicleUnlocks.contains { $0.milestoneLevel == 100 }
+    }
+
+    private var activeExpertChallenge: ExpertChallenge? {
+        expertChallenges.first { $0.isActive() }
+    }
+
+    private var legacy: SkillLegacy? { legacies.first }
+
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -76,6 +107,7 @@ struct SkillDetailView: View {
                     primaryActions
                 }
                 statisticsGrid
+                masteryProgression
                 recentHistory
             }
             .padding(.horizontal, 16)
@@ -100,6 +132,23 @@ struct SkillDetailView: View {
                                     ? "Choose Specialization"
                                     : "Edit Specialization",
                                 systemImage: "signature"
+                            )
+                        }
+                    }
+                    if hasExpertChallengeCapability {
+                        Button {
+                            showingExpertChallenge = true
+                        } label: {
+                            Label("Expert Challenge", systemImage: "checkmark.seal.fill")
+                        }
+                    }
+                    if hasLegacyCapability {
+                        Button {
+                            showingLegacy = true
+                        } label: {
+                            Label(
+                                legacy == nil ? "Create Legacy" : "Edit Legacy",
+                                systemImage: "crown.fill"
                             )
                         }
                     }
@@ -133,6 +182,15 @@ struct SkillDetailView: View {
                 skill: skill,
                 existingSpecialization: specialization
             )
+        }
+        .sheet(isPresented: $showingExpertChallenge) {
+            ExpertChallengeView(
+                skill: skill,
+                currentChallenge: activeExpertChallenge
+            )
+        }
+        .sheet(isPresented: $showingLegacy) {
+            LegacyEditorView(skill: skill, existingLegacy: legacy)
         }
         .sheet(item: $sessionOutcome) { outcome in
             NavigationStack {
@@ -327,6 +385,91 @@ struct SkillDetailView: View {
         }
     }
 
+    @ViewBuilder
+    private var masteryProgression: some View {
+        if hasExpertChallengeCapability || hasLegacyCapability {
+            VStack(spacing: 12) {
+                SectionTitle(
+                    title: "Mastery",
+                    subtitle: "Higher ranks unlock lasting undertakings and identity"
+                )
+
+                if hasExpertChallengeCapability {
+                    Button {
+                        showingExpertChallenge = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: activeExpertChallenge?.systemImage ?? "checkmark.seal.fill")
+                                .font(.title2)
+                                .foregroundStyle(SkillingTimeTheme.gold)
+                                .frame(width: 42)
+                            VStack(alignment: .leading, spacing: 4) {
+                                Text(activeExpertChallenge?.title ?? "Begin an Expert Challenge")
+                                    .font(.headline)
+                                if let challenge = activeExpertChallenge {
+                                    Text(challenge.progressLabel)
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                    ProgressView(value: challenge.fractionComplete)
+                                        .tint(SkillingTimeTheme.gold)
+                                } else {
+                                    Text("Choose a substantial 30-day undertaking for this Skill.")
+                                        .font(.caption)
+                                        .foregroundStyle(.secondary)
+                                }
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(15)
+                        .background(
+                            Color.white.opacity(0.045),
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                    .disabled(skill.isArchived)
+                }
+
+                if hasLegacyCapability {
+                    Button {
+                        showingLegacy = true
+                    } label: {
+                        HStack(spacing: 12) {
+                            Image(systemName: legacy?.crestSymbolName ?? "crown.fill")
+                                .font(.title2)
+                                .foregroundStyle(SkillingTimeTheme.gold)
+                                .frame(width: 42)
+                            VStack(alignment: .leading, spacing: 3) {
+                                Text(legacy?.masterTitle ?? "Create a Master Legacy")
+                                    .font(.headline)
+                                Text(
+                                    legacy == nil
+                                        ? "Choose a permanent Master title and crest."
+                                        : "Your Level 100 identity for \(skill.name)."
+                                )
+                                .font(.caption)
+                                .foregroundStyle(.secondary)
+                            }
+                            Spacer()
+                            Image(systemName: "chevron.right")
+                                .font(.caption.bold())
+                                .foregroundStyle(.tertiary)
+                        }
+                        .padding(15)
+                        .background(
+                            SkillingTimeTheme.gold.opacity(0.07),
+                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+                        )
+                    }
+                    .buttonStyle(.plain)
+                }
+            }
+        }
+    }
+
     private var recentHistory: some View {
         VStack(spacing: 12) {
             SectionTitle(
@@ -397,6 +540,251 @@ struct SkillDetailView: View {
         guard sessionController.start(skillID: skill.id, focusGoal: focusGoal) else { return }
         showingFocusGoal = false
         showingActiveSession = true
+    }
+}
+
+private struct ExpertChallengeView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let skill: LifeSkill
+    let currentChallenge: ExpertChallenge?
+
+    @State private var saveError: String?
+    @State private var showingRetireConfirmation = false
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                if let challenge = currentChallenge {
+                    Section("Active Undertaking") {
+                        Label(challenge.title, systemImage: challenge.systemImage)
+                            .font(.headline)
+                        Text(challenge.challengeDescription)
+                            .foregroundStyle(.secondary)
+                        ProgressView(value: challenge.fractionComplete)
+                            .tint(SkillingTimeTheme.gold)
+                        LabeledContent("Progress", value: challenge.progressLabel)
+                        LabeledContent(
+                            "Ends",
+                            value: challenge.endsAt.formatted(
+                                date: .abbreviated,
+                                time: .omitted
+                            )
+                        )
+                    }
+
+                    Section {
+                        Button("Abandon Challenge", role: .destructive) {
+                            showingRetireConfirmation = true
+                        }
+                    } footer: {
+                        Text("Abandoning removes the active undertaking but never changes Skill XP or previously earned rewards.")
+                    }
+                } else {
+                    Section {
+                        ForEach(ExpertChallengeKind.allCases) { kind in
+                            Button {
+                                start(kind)
+                            } label: {
+                                HStack(spacing: 12) {
+                                    Image(systemName: kind.systemImage)
+                                        .foregroundStyle(SkillingTimeTheme.gold)
+                                        .frame(width: 28)
+                                    VStack(alignment: .leading, spacing: 3) {
+                                        Text(kind.title)
+                                            .font(.headline)
+                                        Text(kind.description(skillName: skill.name))
+                                            .font(.caption)
+                                            .foregroundStyle(.secondary)
+                                    }
+                                }
+                                .padding(.vertical, 5)
+                            }
+                            .buttonStyle(.plain)
+                        }
+                    } header: {
+                        Text("Choose an Expert Challenge")
+                    } footer: {
+                        Text("The challenge lasts 30 days and grants an equipable title when completed. It never mints bonus XP.")
+                    }
+                }
+
+                if let saveError {
+                    Section("Could Not Save") {
+                        Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Expert Challenge")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Done") { dismiss() }
+                }
+            }
+            .confirmationDialog(
+                "Abandon this Expert Challenge?",
+                isPresented: $showingRetireConfirmation,
+                titleVisibility: .visible
+            ) {
+                Button("Abandon Challenge", role: .destructive) { retire() }
+                Button("Cancel", role: .cancel) {}
+            }
+        }
+    }
+
+    private func start(_ kind: ExpertChallengeKind) {
+        do {
+            _ = try CharacterProgressionService.startExpertChallenge(
+                skill: skill,
+                kind: kind,
+                in: modelContext
+            )
+            Haptics.selection()
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+        }
+    }
+
+    private func retire() {
+        guard let currentChallenge else { return }
+        do {
+            try CharacterProgressionService.retireExpertChallenge(
+                currentChallenge,
+                in: modelContext
+            )
+            Haptics.selection()
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+        }
+    }
+}
+
+private struct LegacyEditorView: View {
+    @Environment(\.dismiss) private var dismiss
+    @Environment(\.modelContext) private var modelContext
+
+    let skill: LifeSkill
+    let existingLegacy: SkillLegacy?
+
+    @State private var masterTitle: String
+    @State private var crestSymbolName: String
+    @State private var saveError: String?
+
+    private let crestOptions = [
+        "crown.fill", "seal.fill", "shield.fill", "star.circle.fill",
+        "laurel.leading", "sparkles", "flame.fill", "diamond.fill"
+    ]
+
+    init(skill: LifeSkill, existingLegacy: SkillLegacy?) {
+        self.skill = skill
+        self.existingLegacy = existingLegacy
+        _masterTitle = State(
+            initialValue: existingLegacy?.masterTitle ?? "Master of \(skill.name)"
+        )
+        _crestSymbolName = State(
+            initialValue: existingLegacy?.crestSymbolName ?? "crown.fill"
+        )
+    }
+
+    var body: some View {
+        NavigationStack {
+            Form {
+                Section("Legacy Preview") {
+                    VStack(spacing: 12) {
+                        Image(systemName: crestSymbolName)
+                            .font(.system(size: 42))
+                            .foregroundStyle(SkillingTimeTheme.gold)
+                        Text(masterTitle.isEmpty ? "Master Title" : masterTitle)
+                            .font(.system(.title2, design: .serif, weight: .bold))
+                        Text(skill.name)
+                            .font(.caption.weight(.semibold))
+                            .foregroundStyle(.secondary)
+                    }
+                    .frame(maxWidth: .infinity)
+                    .padding(.vertical, 10)
+                }
+
+                Section("Master Title") {
+                    TextField("Master of \(skill.name)", text: $masterTitle)
+                        .textInputAutocapitalization(.words)
+                }
+
+                Section("Master Crest") {
+                    LazyVGrid(
+                        columns: Array(repeating: GridItem(.flexible()), count: 4),
+                        spacing: 14
+                    ) {
+                        ForEach(crestOptions, id: \.self) { symbol in
+                            Button {
+                                crestSymbolName = symbol
+                                Haptics.selection()
+                            } label: {
+                                Image(systemName: symbol)
+                                    .font(.title2)
+                                    .frame(width: 48, height: 48)
+                                    .background(
+                                        crestSymbolName == symbol
+                                            ? SkillingTimeTheme.gold.opacity(0.18)
+                                            : Color.clear,
+                                        in: RoundedRectangle(cornerRadius: 12)
+                                    )
+                            }
+                            .buttonStyle(.plain)
+                            .accessibilityAddTraits(
+                                crestSymbolName == symbol ? .isSelected : []
+                            )
+                        }
+                    }
+                    .padding(.vertical, 4)
+                }
+
+                Section {
+                    Text("Legacy is identity only. It never changes XP, Quest targets, or progression speed.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+
+                if let saveError {
+                    Section("Could Not Save") {
+                        Label(saveError, systemImage: "exclamationmark.triangle.fill")
+                            .foregroundStyle(.red)
+                    }
+                }
+            }
+            .navigationTitle("Master Legacy")
+            .navigationBarTitleDisplayMode(.inline)
+            .toolbar {
+                ToolbarItem(placement: .cancellationAction) {
+                    Button("Cancel") { dismiss() }
+                }
+                ToolbarItem(placement: .confirmationAction) {
+                    Button("Save") { save() }
+                        .disabled(
+                            masterTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
+                        )
+                }
+            }
+        }
+    }
+
+    private func save() {
+        do {
+            try CharacterProgressionService.saveLegacy(
+                skill: skill,
+                masterTitle: masterTitle,
+                crestSymbolName: crestSymbolName,
+                in: modelContext
+            )
+            Haptics.levelUp(major: true)
+            dismiss()
+        } catch {
+            saveError = error.localizedDescription
+        }
     }
 }
 
