@@ -1,0 +1,57 @@
+name: Capture Skilling Time Build Metadata
+
+on:
+  workflow_run:
+    workflows: ["Build Skilling Time iPhoneOS IPA"]
+    types: [completed]
+
+permissions:
+  actions: read
+  contents: write
+
+jobs:
+  capture:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: main
+          fetch-depth: 0
+      - name: Record run and artifact identifiers
+        env:
+          GH_TOKEN: ${{ github.token }}
+          RUN_ID: ${{ github.event.workflow_run.id }}
+          CONCLUSION: ${{ github.event.workflow_run.conclusion }}
+          HEAD_SHA: ${{ github.event.workflow_run.head_sha }}
+        shell: bash
+        run: |
+          set -euo pipefail
+          curl -fsSL \
+            -H "Authorization: Bearer $GH_TOKEN" \
+            -H 'Accept: application/vnd.github+json' \
+            -H 'X-GitHub-Api-Version: 2022-11-28' \
+            "https://api.github.com/repos/$GITHUB_REPOSITORY/actions/runs/$RUN_ID/artifacts?per_page=100" > /tmp/artifacts.json
+          ARTIFACT_ID=$(python3 - <<'PY'
+          import json
+          data=json.load(open('/tmp/artifacts.json'))
+          print(next((a['id'] for a in data.get('artifacts',[]) if a['name']=='SkillingTime-v0.3.1-LiveActivity'), ''))
+          PY
+          )
+          mkdir -p .github
+          python3 - <<PY
+          import json
+          json.dump({
+            'run_id': int('$RUN_ID'),
+            'artifact_id': int('$ARTIFACT_ID') if '$ARTIFACT_ID' else None,
+            'conclusion': '$CONCLUSION',
+            'head_sha': '$HEAD_SHA'
+          }, open('.github/last-build-artifact.json','w'), indent=2)
+          open('.github/last-build-artifact.json','a').write('\n')
+          PY
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add .github/last-build-artifact.json
+          if ! git diff --cached --quiet; then
+            git commit -m "Record iOS build ${RUN_ID} (${CONCLUSION})"
+            git push origin HEAD:main
+          fi
