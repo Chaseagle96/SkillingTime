@@ -625,6 +625,9 @@
 		};
 		A00000000000000000000035 /* PBXTargetDependency */ = {
 			isa = PBXTargetDependency;
+			platformFilters = (
+				iphoneos,
+			);
 			target = A00000000000000000000050 /* SkillingTimeWatch */;
 			targetProxy = A00000000000000000000034 /* PBXContainerItemProxy */;
 		};
