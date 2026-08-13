@@ -64,7 +64,7 @@
 		310000000000000000000006 /* ProgressionEngine.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000004 /* ProgressionEngine.swift */; };
 		310000000000000000000007 /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000005 /* PrivacyInfo.xcprivacy */; };
 		320000000000000000000001 /* SkillingTimeWidgets.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 210000000000000000000010 /* SkillingTimeWidgets.appex */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
-		340000000000000000000001 /* SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
+		340000000000000000000001 /* SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; platformFilters = (iphoneos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };
 		300000000000000000000026 /* WatchSyncModelTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000002B /* WatchSyncModelTests.swift */; };
 /* End PBXBuildFile section */
 
