@@ -4,6 +4,7 @@ import SwiftUI
 struct SkillDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionController: SessionController
+    @EnvironmentObject private var liveActivityCoordinator: LiveActivityCoordinator
     @Query private var sessions: [SkillSession]
     @Query private var chronicleUnlocks: [ChronicleUnlock]
     @Query private var specializations: [SkillSpecialization]
@@ -545,9 +546,22 @@ struct SkillDetailView: View {
 
     private func startSession(focusGoal: SessionFocusGoal?) {
         guard sessionController.start(skillID: skill.id, focusGoal: focusGoal) else { return }
+        synchronizeLiveActivity()
         Haptics.sessionStart()
         showingFocusGoal = false
         showingActiveSession = true
+    }
+
+    private func synchronizeLiveActivity() {
+        let snapshot = sessionController.activeSession
+        let baseTotalSeconds = statistics.totalSeconds
+        Task { @MainActor in
+            await liveActivityCoordinator.synchronize(
+                snapshot: snapshot,
+                skill: skill,
+                baseTotalSeconds: baseTotalSeconds
+            )
+        }
     }
 }
 
