@@ -15,7 +15,7 @@ enum SkillingTimeWatchConnectionState: String, Sendable {
 /// commands and publishes replaceable snapshots without knowing about
 /// WCSession dictionaries, reachability, or queued delivery.
 @MainActor
-final class SkillingTimeWatchConnectivity: NSObject, ObservableObject {
+final class SkillingTimeWatchConnectivity: NSObject, ObservableObject, WCSessionDelegate {
     @Published private(set) var receivedState: WatchStateSnapshot?
     @Published private(set) var connectionState: SkillingTimeWatchConnectionState = .inactive
     @Published private(set) var incomingCommandVersion = 0
@@ -187,7 +187,7 @@ final class SkillingTimeWatchConnectivity: NSObject, ObservableObject {
         }
     }
 
-    nonisolated func session(
+    @objc nonisolated func session(
         _ session: WCSession,
         activationDidCompleteWith activationState: WCSessionActivationState,
         error: Error?
@@ -210,27 +210,27 @@ final class SkillingTimeWatchConnectivity: NSObject, ObservableObject {
         }
     }
 
-    nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
+    @objc nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
         Task { @MainActor [weak self] in
             self?.connectionState = .inactive
         }
     }
 
-    nonisolated func sessionDidDeactivate(_ session: WCSession) {
+    @objc nonisolated func sessionDidDeactivate(_ session: WCSession) {
         Task { @MainActor [weak self] in
             self?.connectionState = .inactive
             self?.session.activate()
         }
     }
 
-    nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
+    @objc nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor [weak self] in
             guard let self, connectionState != .unsupported else { return }
             connectionState = session.isReachable ? .connected : .phoneUnavailable
         }
     }
 
-    nonisolated func session(
+    @objc nonisolated func session(
         _ session: WCSession,
         didReceiveApplicationContext applicationContext: [String: Any]
     ) {
@@ -240,7 +240,7 @@ final class SkillingTimeWatchConnectivity: NSObject, ObservableObject {
         }
     }
 
-    nonisolated func session(
+    @objc nonisolated func session(
         _ session: WCSession,
         didReceiveUserInfo userInfo: [String: Any]
     ) {
@@ -250,7 +250,7 @@ final class SkillingTimeWatchConnectivity: NSObject, ObservableObject {
         }
     }
 
-    nonisolated func session(
+    @objc nonisolated func session(
         _ session: WCSession,
         didReceiveMessage message: [String: Any]
     ) {
@@ -260,7 +260,7 @@ final class SkillingTimeWatchConnectivity: NSObject, ObservableObject {
         }
     }
 
-    nonisolated func session(
+    @objc nonisolated func session(
         _ session: WCSession,
         didReceiveMessage message: [String: Any],
         replyHandler: @escaping ([String: Any]) -> Void
