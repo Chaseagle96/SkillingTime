@@ -49,6 +49,17 @@ struct RootTabView: View {
             .first
     }
 
+    private var persistenceErrorPresented: Binding<Bool> {
+        Binding<Bool>(
+            get: { persistenceError != nil },
+            set: { isPresented in
+                if !isPresented {
+                    persistenceError = nil
+                }
+            }
+        )
+    }
+
     var body: some View {
         Group {
             if #available(iOS 26.1, *) {
@@ -168,10 +179,7 @@ struct RootTabView: View {
         }
         .alert(
             "Skilling Time Error",
-            isPresented: Binding(
-                get: { persistenceError != nil },
-                set: { if !$0 { persistenceError = nil } }
-            )
+            isPresented: persistenceErrorPresented
         ) {
             Button("OK") { persistenceError = nil }
         } message: {
