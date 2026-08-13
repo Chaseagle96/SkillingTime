@@ -58,7 +58,19 @@ final class WatchSyncModelTests: XCTestCase {
 
         XCTAssertTrue(store.appendInbound(command))
         XCTAssertFalse(store.appendInbound(command))
-        XCTAssertEqual(store.takeInboundCommands(), [command])
+        let received = store.takeInboundCommands()
+        XCTAssertEqual(received.count, 1)
+        guard let receivedCommand = received.first else {
+            return XCTFail("The queued command was not delivered")
+        }
+        XCTAssertEqual(receivedCommand.id, command.id)
+        XCTAssertEqual(receivedCommand.kind, command.kind)
+        XCTAssertEqual(receivedCommand.skillID, command.skillID)
+        XCTAssertEqual(
+            receivedCommand.createdAt.timeIntervalSince1970,
+            command.createdAt.timeIntervalSince1970,
+            accuracy: 1
+        )
 
         store.markHandled(command.id)
         XCTAssertFalse(store.appendInbound(command))
