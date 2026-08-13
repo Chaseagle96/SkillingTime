@@ -40,6 +40,13 @@ jobs:
           set -euxo pipefail
           test -f SkillingTime.xcodeproj/project.pbxproj
           test -f SkillingTime.xcodeproj/xcshareddata/xcschemes/SkillingTime.xcscheme
+          grep -Fq 'ActivityConfiguration(for: SkillingTimeActivityAttributes.self)' \
+            SkillingTimeWidgets/SkillingTimeLiveActivityWidget.swift
+          grep -Fq 'SkillingTimeLiveActivityWidget()' \
+            SkillingTimeWidgets/SkillingTimeWidgetBundle.swift
+          grep -Fq 'SkillingTimeWidgets' SkillingTime.xcodeproj/project.pbxproj
+          grep -Fq 'Embed App Extensions' SkillingTime.xcodeproj/project.pbxproj
+          grep -Fq 'NSSupportsLiveActivities' SkillingTime/Info.plist
           xcodebuild -project SkillingTime.xcodeproj -list
           xcodebuild \
             -project SkillingTime.xcodeproj \

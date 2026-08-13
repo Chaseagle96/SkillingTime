@@ -203,6 +203,70 @@ final class SessionControllerTests: XCTestCase {
     }
 }
 
+final class LiveActivityStateTests: XCTestCase {
+    func testRunningStateUsesAnAuthoritativeTimerAnchor() {
+        let start = Date(timeIntervalSince1970: 10_000)
+        let state = SkillingTimeActivityAttributes.ContentState(
+            accumulatedActiveSeconds: 120,
+            activeSegmentStartedAt: start.addingTimeInterval(300),
+            baseTotalSeconds: 3_600,
+            level: 4,
+            rankName: "Apprentice",
+            xpEarned: 40,
+            xpRemaining: 100,
+            progressFraction: 0.4,
+            focusGoalTitle: nil,
+            focusGoalProgressLabel: nil,
+            focusGoalFraction: nil,
+            questTitle: nil,
+            questProgressLabel: nil,
+            questFraction: nil,
+            questTimerStart: nil,
+            questTimerEnd: nil,
+            questIsComplete: nil,
+            isPaused: false,
+            isAwaitingCommit: false
+        )
+
+        XCTAssertEqual(
+            state.effectiveTimerStart,
+            start.addingTimeInterval(180),
+            "The system-rendered timer must include active time from earlier segments."
+        )
+        XCTAssertEqual(state.elapsedSeconds(at: start.addingTimeInterval(360)), 180)
+    }
+
+    func testPausedStateFreezesElapsedTimeWithoutAForegroundTimer() {
+        let state = SkillingTimeActivityAttributes.ContentState(
+            accumulatedActiveSeconds: 240,
+            activeSegmentStartedAt: nil,
+            baseTotalSeconds: 0,
+            level: 1,
+            rankName: "Novice",
+            xpEarned: 0,
+            xpRemaining: 100,
+            progressFraction: 0,
+            focusGoalTitle: nil,
+            focusGoalProgressLabel: nil,
+            focusGoalFraction: nil,
+            questTitle: nil,
+            questProgressLabel: nil,
+            questFraction: nil,
+            questTimerStart: nil,
+            questTimerEnd: nil,
+            questIsComplete: nil,
+            isPaused: true,
+            isAwaitingCommit: false
+        )
+
+        XCTAssertNil(state.effectiveTimerStart)
+        XCTAssertEqual(
+            state.elapsedSeconds(at: Date(timeIntervalSince1970: 999_999)),
+            240
+        )
+    }
+}
+
 final class FocusGoalTests: XCTestCase {
     func testDurationGoalCompletesAtTarget() {
         let goal = SessionFocusGoal.duration(seconds: 1_800, startingTotalXP: 200)
