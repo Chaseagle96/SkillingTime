@@ -61,6 +61,87 @@ struct RootTabView: View {
     }
 
     var body: some View {
+        rootContent
+            .animation(
+                SkillingTimeMotion.animation(
+                    SkillingTimeMotion.responsive,
+                    reduceMotion: reduceMotion
+                ),
+                value: sessionController.activeSession != nil
+            )
+            .fullScreenCover(isPresented: $showingActiveSession) {
+                if let presentedSkillID {
+                    ActiveSessionView(skillID: presentedSkillID)
+                }
+            }
+            .onChange(of: showingActiveSession) { _, isPresented in
+                if !isPresented {
+                    presentedSkillID = nil
+                }
+            }
+            .onChange(of: selectedTab) { _, _ in
+                Haptics.selection()
+            }
+            .onOpenURL(perform: handleDeepLink)
+            .task {
+                await prepareApplication()
+            }
+            .onChange(of: sessionController.activeSession) { _, _ in
+                synchronizeAmbientSessionSoon()
+            }
+            .onChange(of: watchConnectivity.incomingCommandVersion) { _, _ in
+                Task {
+                    await processWatchCommands()
+                }
+            }
+            .onChange(of: ledgerFingerprints) { _, _ in
+                synchronizeAmbientSessionSoon()
+            }
+            .onChange(of: skillFingerprints) { _, _ in
+                synchronizeAmbientSessionSoon()
+            }
+            .onChange(of: questFingerprints) { _, _ in
+                synchronizeAmbientSessionSoon()
+            }
+            .onChange(of: notificationManager.alertsEnabled) { _, _ in
+                synchronizeAmbientSessionSoon()
+            }
+            .onChange(of: scenePhase) { _, phase in
+                guard phase == .active else { return }
+                sessionController.refreshFromSharedStorage()
+                do {
+                    _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
+                } catch {
+                    persistenceError = "The Questboard could not refresh. \(error.localizedDescription)"
+                }
+                Task {
+                    await processWatchCommands()
+                }
+                synchronizeAmbientSessionSoon()
+            }
+            .onChange(of: sessionController.storageErrorMessage) { _, message in
+                if let message {
+                    persistenceError = message
+                }
+            }
+            .onChange(of: liveActivityCoordinator.lastErrorMessage) { _, message in
+                if let message {
+                    persistenceError = message
+                }
+            }
+            .alert(
+                "Skilling Time Error",
+                isPresented: persistenceErrorPresented
+            ) {
+                Button("OK") { persistenceError = nil }
+            } message: {
+                Text(persistenceError ?? "The requested change could not be completed.")
+            }
+            .preferredColorScheme(.dark)
+    }
+
+    @ViewBuilder
+    private var rootContent: some View {
         Group {
             if #available(iOS 26.1, *) {
                 toggleableNativeAccessoryTabs
@@ -70,82 +151,6 @@ struct RootTabView: View {
                 fallbackAccessoryTabs
             }
         }
-        .animation(
-            SkillingTimeMotion.animation(
-                SkillingTimeMotion.responsive,
-                reduceMotion: reduceMotion
-            ),
-            value: sessionController.activeSession != nil
-        )
-        .fullScreenCover(isPresented: $showingActiveSession) {
-            if let presentedSkillID {
-                ActiveSessionView(skillID: presentedSkillID)
-            }
-        }
-        .onChange(of: showingActiveSession) { _, isPresented in
-            if !isPresented {
-                presentedSkillID = nil
-            }
-        }
-        .onChange(of: selectedTab) { _, _ in
-            Haptics.selection()
-        }
-        .onOpenURL(perform: handleDeepLink)
-        .task {
-            await prepareApplication()
-        }
-        .onChange(of: sessionController.activeSession) { _, _ in
-            synchronizeAmbientSessionSoon()
-        }
-        .onChange(of: watchConnectivity.incomingCommandVersion) { _, _ in
-            Task {
-                await processWatchCommands()
-            }
-        }
-        .onChange(of: ledgerFingerprints) { _, _ in
-            synchronizeAmbientSessionSoon()
-        }
-        .onChange(of: skillFingerprints) { _, _ in
-            synchronizeAmbientSessionSoon()
-        }
-        .onChange(of: questFingerprints) { _, _ in
-            synchronizeAmbientSessionSoon()
-        }
-        .onChange(of: notificationManager.alertsEnabled) { _, _ in
-            synchronizeAmbientSessionSoon()
-        }
-        .onChange(of: scenePhase) { _, phase in
-            guard phase == .active else { return }
-            sessionController.refreshFromSharedStorage()
-            do {
-                _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
-            } catch {
-                persistenceError = "The Questboard could not refresh. \(error.localizedDescription)"
-            }
-            Task {
-                await processWatchCommands()
-            }
-            synchronizeAmbientSessionSoon()
-        }
-        .onChange(of: sessionController.storageErrorMessage) { _, message in
-            if let message {
-                persistenceError = message
-            }
-        }
-        .onChange(of: liveActivityCoordinator.lastErrorMessage) { _, message in
-            if let message {
-                persistenceError = message
-            }
-        }
-        .alert(
-            "Skilling Time Error",
-            isPresented: persistenceErrorPresented
-        ) {
-            Button("OK") { persistenceError = nil }
-        } message: {
-            Text(persistenceError ?? "The requested change could not be completed.")
-        }
-        .preferredColorScheme(.dark)
     }
 
     private var tabView: some View {
