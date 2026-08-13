@@ -92,47 +92,7 @@ struct RootTabView: View {
         }
         .onOpenURL(perform: handleDeepLink)
         .task {
-            watchConnectivity.activate()
-            var preparationFailures: [String] = []
-            do {
-                try seedBuiltInSkillsIfNeeded()
-            } catch {
-                preparationFailures.append("Skill setup: \(error.localizedDescription)")
-            }
-            do {
-                try RewardBackfillService.reconcileAll(in: modelContext)
-            } catch {
-                preparationFailures.append("Reward history: \(error.localizedDescription)")
-            }
-            do {
-                try SkillLedgerService.rebuildIfNeeded(in: modelContext)
-            } catch {
-                preparationFailures.append("Progress ledger: \(error.localizedDescription)")
-            }
-            do {
-                try ActivityDayLedgerService.rebuildIfNeeded(in: modelContext)
-            } catch {
-                preparationFailures.append("Daily activity ledger: \(error.localizedDescription)")
-            }
-            do {
-                try CharacterProgressionService.prepare(in: modelContext)
-            } catch {
-                preparationFailures.append("Character Paths: \(error.localizedDescription)")
-            }
-            do {
-                _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
-            } catch {
-                preparationFailures.append("Questboard: \(error.localizedDescription)")
-            }
-            if !preparationFailures.isEmpty {
-                persistenceError = "Skilling Time could not fully prepare its persistent history. "
-                    + preparationFailures.joined(separator: " ")
-            }
-            if let storageError = sessionController.storageErrorMessage {
-                persistenceError = storageError
-            }
-            await processWatchCommands()
-            await synchronizeAmbientSession()
+            await prepareApplication()
         }
         .onChange(of: sessionController.activeSession) { _, _ in
             synchronizeAmbientSessionSoon()
@@ -343,6 +303,50 @@ struct RootTabView: View {
         Task {
             await synchronizeAmbientSession()
         }
+    }
+
+    private func prepareApplication() async {
+        watchConnectivity.activate()
+        var preparationFailures: [String] = []
+        do {
+            try seedBuiltInSkillsIfNeeded()
+        } catch {
+            preparationFailures.append("Skill setup: \(error.localizedDescription)")
+        }
+        do {
+            try RewardBackfillService.reconcileAll(in: modelContext)
+        } catch {
+            preparationFailures.append("Reward history: \(error.localizedDescription)")
+        }
+        do {
+            try SkillLedgerService.rebuildIfNeeded(in: modelContext)
+        } catch {
+            preparationFailures.append("Progress ledger: \(error.localizedDescription)")
+        }
+        do {
+            try ActivityDayLedgerService.rebuildIfNeeded(in: modelContext)
+        } catch {
+            preparationFailures.append("Daily activity ledger: \(error.localizedDescription)")
+        }
+        do {
+            try CharacterProgressionService.prepare(in: modelContext)
+        } catch {
+            preparationFailures.append("Character Paths: \(error.localizedDescription)")
+        }
+        do {
+            _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
+        } catch {
+            preparationFailures.append("Questboard: \(error.localizedDescription)")
+        }
+        if !preparationFailures.isEmpty {
+            persistenceError = "Skilling Time could not fully prepare its persistent history. "
+                + preparationFailures.joined(separator: " ")
+        }
+        if let storageError = sessionController.storageErrorMessage {
+            persistenceError = storageError
+        }
+        await processWatchCommands()
+        await synchronizeAmbientSession()
     }
 
     private func synchronizeAmbientSession() async {
