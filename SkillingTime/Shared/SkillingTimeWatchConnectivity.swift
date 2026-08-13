@@ -210,6 +210,10 @@ final class SkillingTimeWatchConnectivity: NSObject, ObservableObject, WCSession
         }
     }
 
+#if os(iOS)
+    // These lifecycle callbacks are part of the iOS WCSessionDelegate surface.
+    // watchOS marks them unavailable because a Watch session is not deactivated
+    // and reactivated in the same way as its iPhone counterpart.
     @objc nonisolated func sessionDidBecomeInactive(_ session: WCSession) {
         Task { @MainActor [weak self] in
             self?.connectionState = .inactive
@@ -222,6 +226,7 @@ final class SkillingTimeWatchConnectivity: NSObject, ObservableObject, WCSession
             self?.session.activate()
         }
     }
+#endif
 
     @objc nonisolated func sessionReachabilityDidChange(_ session: WCSession) {
         Task { @MainActor [weak self] in
