@@ -72,6 +72,7 @@ final class WatchSyncModelTests: XCTestCase {
             accuracy: 1
         )
 
+        XCTAssertEqual(store.takeInboundCommands().count, 1)
         store.markHandled(command.id)
         XCTAssertFalse(store.appendInbound(command))
         XCTAssertTrue(store.takeInboundCommands().isEmpty)

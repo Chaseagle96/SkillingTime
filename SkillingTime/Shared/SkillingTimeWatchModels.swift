@@ -262,7 +262,6 @@ struct WatchSyncStateStore {
 
     func takeInboundCommands() -> [WatchSessionCommand] {
         let commands = loadCommands()
-        defaults.removeObject(forKey: SkillingTimeWatchSync.inboundCommandsKey)
         return commands.filter { !isHandled($0.id) }
     }
 
@@ -274,6 +273,14 @@ struct WatchSyncStateStore {
             ids.removeFirst(ids.count - SkillingTimeWatchSync.maxHandledCommandIDs)
         }
         defaults.set(ids.map(\.uuidString), forKey: SkillingTimeWatchSync.handledCommandIDsKey)
+
+        var remaining = loadCommands()
+        remaining.removeAll { $0.id == id }
+        if remaining.isEmpty {
+            defaults.removeObject(forKey: SkillingTimeWatchSync.inboundCommandsKey)
+        } else {
+            saveCommands(remaining)
+        }
     }
 
     private func isHandled(_ id: UUID) -> Bool {

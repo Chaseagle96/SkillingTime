@@ -125,13 +125,15 @@ final class SkillingTimeWatchConnectivity: NSObject, ObservableObject, WCSession
         lastErrorMessage = nil
     }
 
-    /// Returns durable commands exactly once. A command UUID is marked handled
-    /// before domain execution, while SessionCommitService remains idempotent
-    /// for a repeated completion received from an older queued delivery.
+    /// Returns durable commands that still need canonical execution. Callers
+    /// acknowledge each command only after the domain action has returned so a
+    /// process termination cannot silently discard a queued Watch operation.
     func takeIncomingCommands() -> [WatchSessionCommand] {
-        let commands = store.takeInboundCommands()
-        commands.forEach { store.markHandled($0.id) }
-        return commands
+        store.takeInboundCommands()
+    }
+
+    func markCommandHandled(_ commandID: UUID) {
+        store.markHandled(commandID)
     }
 
     func recordCommandResult(_ result: WatchCommandResult) {

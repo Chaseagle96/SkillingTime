@@ -447,6 +447,7 @@ struct RootTabView: View {
 
         for command in commands {
             let result = apply(command)
+            watchConnectivity.markCommandHandled(command.id)
             watchConnectivity.recordCommandResult(result)
             await synchronizeAmbientSession()
         }
