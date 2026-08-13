@@ -45,9 +45,12 @@ jobs:
           test -f SkillingTime.xcodeproj/xcshareddata/xcschemes/SkillingTimeWatch.xcscheme
           test -d SkillingTimeWatch
           grep -Fq 'com.apple.product-type.application.watchapp2' SkillingTime.xcodeproj/project.pbxproj
+          grep -Fq 'com.apple.product-type.watchkit2-extension' SkillingTime.xcodeproj/project.pbxproj
           grep -Fq 'Embed Watch Content' SkillingTime.xcodeproj/project.pbxproj
+          grep -Fq 'SkillingTimeWatchExtension.appex' SkillingTime.xcodeproj/project.pbxproj
           grep -Fq 'WatchConnectivity.framework' SkillingTime.xcodeproj/project.pbxproj
           grep -Fq 'WKCompanionAppBundleIdentifier' SkillingTimeWatch/Info.plist
+          grep -Fq 'WKAppBundleIdentifier' SkillingTimeWatch/ExtensionInfo.plist
           grep -Fq 'WatchStateSnapshot' SkillingTime/Shared/SkillingTimeWatchModels.swift
           grep -Fq 'WatchSessionCommand' SkillingTime/Shared/SkillingTimeWatchModels.swift
           grep -Fq 'ActivityConfiguration(for: SkillingTimeActivityAttributes.self)' \
@@ -202,30 +205,47 @@ jobs:
 
           WATCH_APP="$WATCH_DERIVED_DATA/Build/Products/Release-watchsimulator/SkillingTimeWatch.app"
           WATCH_EXEC="$WATCH_APP/SkillingTimeWatch"
+          WATCH_EXTENSION="$WATCH_APP/PlugIns/SkillingTimeWatchExtension.appex"
+          WATCH_EXTENSION_EXEC="$WATCH_EXTENSION/SkillingTimeWatchExtension"
           test -d "$WATCH_APP" || {
             echo 'ERROR: SkillingTimeWatch.app was not produced'
             find "$WATCH_DERIVED_DATA/Build/Products" -maxdepth 4 -print
             exit 1
           }
           test -x "$WATCH_EXEC" || { echo 'ERROR: Watch executable is missing'; exit 1; }
+          test -d "$WATCH_EXTENSION" || { echo 'ERROR: WatchKit extension is missing'; find "$WATCH_APP" -maxdepth 4 -print; exit 1; }
+          test -x "$WATCH_EXTENSION_EXEC" || { echo 'ERROR: WatchKit extension executable is missing'; exit 1; }
           plutil -lint "$WATCH_APP/Info.plist"
+          plutil -lint "$WATCH_EXTENSION/Info.plist"
           WATCH_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCH_APP/Info.plist")
           WATCH_COMPANION_ID=$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCH_APP/Info.plist")
+          WATCH_EXTENSION_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCH_EXTENSION/Info.plist")
           test "$WATCH_BUNDLE_ID" = 'com.projectskillbook.app.watchkitapp'
           test "$WATCH_COMPANION_ID" = 'com.projectskillbook.app'
+          test "$WATCH_EXTENSION_BUNDLE_ID" = 'com.projectskillbook.app.watchkitapp.watchkitextension'
           WATCH_FILE=$(file "$WATCH_EXEC")
+          WATCH_EXTENSION_FILE=$(file "$WATCH_EXTENSION_EXEC")
           echo "$WATCH_FILE"
+          echo "$WATCH_EXTENSION_FILE"
           echo "$WATCH_FILE" | grep -q 'Mach-O' || { echo 'ERROR: Watch executable is not Mach-O'; exit 1; }
+          echo "$WATCH_EXTENSION_FILE" | grep -q 'Mach-O' || { echo 'ERROR: WatchKit extension executable is not Mach-O'; exit 1; }
           WATCH_ARCHS=$(lipo -archs "$WATCH_EXEC")
+          WATCH_EXTENSION_ARCHS=$(lipo -archs "$WATCH_EXTENSION_EXEC")
           echo "Watch architectures: $WATCH_ARCHS"
+          echo "WatchKit extension architectures: $WATCH_EXTENSION_ARCHS"
           echo "$WATCH_ARCHS" | grep -qw arm64 || { echo 'ERROR: Watch executable lacks arm64'; exit 1; }
+          echo "$WATCH_EXTENSION_ARCHS" | grep -qw arm64 || { echo 'ERROR: WatchKit extension lacks arm64'; exit 1; }
 
           {
             echo "Watch app: $WATCH_APP"
             echo "Watch bundle identifier: $WATCH_BUNDLE_ID"
             echo "Watch companion identifier: $WATCH_COMPANION_ID"
             echo "Watch executable: $WATCH_FILE"
+            echo "WatchKit extension: $WATCH_EXTENSION"
+            echo "WatchKit extension bundle identifier: $WATCH_EXTENSION_BUNDLE_ID"
+            echo "WatchKit extension executable: $WATCH_EXTENSION_FILE"
             echo "Watch architectures: $WATCH_ARCHS"
+            echo "WatchKit extension architectures: $WATCH_EXTENSION_ARCHS"
           } | tee "$RUNNER_TEMP/watch-validation.txt"
 
           echo "WATCH_APP_PATH=$WATCH_APP" >> "$GITHUB_ENV"
@@ -258,6 +278,9 @@ jobs:
           grep -Fq 'Payload/SkillingTime.app/Watch/SkillingTimeWatch.app/' "$RUNNER_TEMP/ipa-contents.txt" || {
             echo 'ERROR: IPA does not contain the embedded Watch application'; exit 1;
           }
+          grep -Fq 'Payload/SkillingTime.app/Watch/SkillingTimeWatch.app/PlugIns/SkillingTimeWatchExtension.appex/' "$RUNNER_TEMP/ipa-contents.txt" || {
+            echo 'ERROR: IPA does not contain the embedded WatchKit extension'; exit 1;
+          }
 
           rm -rf "$RUNNER_TEMP/ipa-inspect"
           mkdir -p "$RUNNER_TEMP/ipa-inspect"
@@ -265,22 +288,27 @@ jobs:
           IPA_APP="$RUNNER_TEMP/ipa-inspect/Payload/SkillingTime.app"
           IPA_EXT="$IPA_APP/PlugIns/SkillingTimeWidgets.appex"
           IPA_WATCH="$IPA_APP/Watch/SkillingTimeWatch.app"
+          IPA_WATCH_EXTENSION="$IPA_WATCH/PlugIns/SkillingTimeWatchExtension.appex"
 
           plutil -lint "$IPA_APP/Info.plist"
           plutil -lint "$IPA_EXT/Info.plist"
           plutil -lint "$IPA_WATCH/Info.plist"
+          plutil -lint "$IPA_WATCH_EXTENSION/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$IPA_APP/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$IPA_APP/Info.plist")" = "LaunchBackground"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIImageName' "$IPA_APP/Info.plist")" = "LaunchMark"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$IPA_EXT/Info.plist")" = "com.apple.widgetkit-extension"
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$IPA_WATCH/Info.plist")" = "com.projectskillbook.app.watchkitapp"
           test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$IPA_WATCH/Info.plist")" = "com.projectskillbook.app"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$IPA_WATCH_EXTENSION/Info.plist")" = "com.projectskillbook.app.watchkitapp.watchkitextension"
           file "$IPA_APP/SkillingTime" | grep -q 'Mach-O'
           file "$IPA_EXT/SkillingTimeWidgets" | grep -q 'Mach-O'
           file "$IPA_WATCH/SkillingTimeWatch" | grep -q 'Mach-O'
+          file "$IPA_WATCH_EXTENSION/SkillingTimeWatchExtension" | grep -q 'Mach-O'
           lipo -archs "$IPA_APP/SkillingTime" | grep -qw arm64
           lipo -archs "$IPA_EXT/SkillingTimeWidgets" | grep -qw arm64
           lipo -archs "$IPA_WATCH/SkillingTimeWatch" | grep -qw arm64
+          lipo -archs "$IPA_WATCH_EXTENSION/SkillingTimeWatchExtension" | grep -qw arm64
 
           shasum -a 256 "$IPA_NAME" | tee "$IPA_NAME.sha256"
           cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.5.1-The-Awakening-validation.txt

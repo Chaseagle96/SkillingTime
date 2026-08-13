@@ -14,9 +14,23 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A00000000000000000000050"
+               BlueprintIdentifier = "A00000000000000000000051"
                BuildableName = "SkillingTimeWatch.app"
                BlueprintName = "SkillingTimeWatch"
+               ReferencedContainer = "container:SkillingTime.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A00000000000000000000050"
+               BuildableName = "SkillingTimeWatchExtension.appex"
+               BlueprintName = "SkillingTimeWatchExtension"
                ReferencedContainer = "container:SkillingTime.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -42,7 +56,7 @@
       <BuildableProductRunnable runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A00000000000000000000050"
+            BlueprintIdentifier = "A00000000000000000000051"
             BuildableName = "SkillingTimeWatch.app"
             BlueprintName = "SkillingTimeWatch"
             ReferencedContainer = "container:SkillingTime.xcodeproj">
@@ -58,7 +72,7 @@
       <BuildableProductRunnable runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A00000000000000000000050"
+            BlueprintIdentifier = "A00000000000000000000051"
             BuildableName = "SkillingTimeWatch.app"
             BlueprintName = "SkillingTimeWatch"
             ReferencedContainer = "container:SkillingTime.xcodeproj">

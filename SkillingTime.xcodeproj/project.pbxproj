@@ -55,7 +55,10 @@
 		330000000000000000000008 /* WatchViews.swift in Sources */ = {isa = PBXBuildFile; fileRef = 220000000000000000000004 /* WatchViews.swift */; };
 		330000000000000000000009 /* Assets.xcassets in Resources */ = {isa = PBXBuildFile; fileRef = 220000000000000000000007 /* Assets.xcassets */; };
 		33000000000000000000000A /* PrivacyInfo.xcprivacy in Resources */ = {isa = PBXBuildFile; fileRef = 220000000000000000000008 /* PrivacyInfo.xcprivacy */; };
+		33000000000000000000000B /* Assets.xcassets in Watch App Resources */ = {isa = PBXBuildFile; fileRef = 220000000000000000000007 /* Assets.xcassets */; };
+		33000000000000000000000C /* PrivacyInfo.xcprivacy in Watch App Resources */ = {isa = PBXBuildFile; fileRef = 220000000000000000000008 /* PrivacyInfo.xcprivacy */; };
 		350000000000000000000002 /* WatchConnectivity.framework in Frameworks */ = {isa = PBXBuildFile; fileRef = 230000000000000000000001 /* WatchConnectivity.framework */; };
+		350000000000000000000010 /* SkillingTimeWatchExtension.appex in Embed App Extensions */ = {isa = PBXBuildFile; fileRef = 220000000000000000000011 /* SkillingTimeWatchExtension.appex */; settings = {ATTRIBUTES = (RemoveHeadersOnCopy, ); }; };
 		310000000000000000000001 /* SkillingTimeWidgetBundle.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000001 /* SkillingTimeWidgetBundle.swift */; };
 		310000000000000000000002 /* SkillingTimeLiveActivityWidget.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000002 /* SkillingTimeLiveActivityWidget.swift */; };
 		310000000000000000000003 /* SessionSharedStorage.swift in Sources */ = {isa = PBXBuildFile; fileRef = 200000000000000000000019 /* SessionSharedStorage.swift */; };
@@ -88,6 +91,13 @@
 			containerPortal = A00000000000000000000001 /* Project object */;
 			proxyType = 1;
 			remoteGlobalIDString = A00000000000000000000050;
+			remoteInfo = SkillingTimeWatchExtension;
+		};
+		A00000000000000000000036 /* PBXContainerItemProxy */ = {
+			isa = PBXContainerItemProxy;
+			containerPortal = A00000000000000000000001 /* Project object */;
+			proxyType = 1;
+			remoteGlobalIDString = A00000000000000000000051;
 			remoteInfo = SkillingTimeWatch;
 		};
 /* End PBXContainerItemProxy section */
@@ -113,6 +123,17 @@
 				340000000000000000000001 /* SkillingTimeWatch.app in Embed Watch Content */,
 			);
 			name = "Embed Watch Content";
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0000000000000000000001F /* Embed App Extensions */ = {
+			isa = PBXCopyFilesBuildPhase;
+			buildActionMask = 2147483647;
+			dstPath = "";
+			dstSubfolderSpec = 13;
+			files = (
+				350000000000000000000010 /* SkillingTimeWatchExtension.appex in Embed App Extensions */,
+			);
+			name = "Embed App Extensions";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
 /* End PBXCopyFilesBuildPhase section */
@@ -172,10 +193,12 @@
 		220000000000000000000006 /* SkillingTimeWatch.entitlements */ = {isa = PBXFileReference; lastKnownFileType = text.plist.entitlements; path = SkillingTimeWatch.entitlements; sourceTree = "<group>"; };
 		220000000000000000000007 /* Assets.xcassets */ = {isa = PBXFileReference; lastKnownFileType = folder.assetcatalog; path = Assets.xcassets; sourceTree = "<group>"; };
 		220000000000000000000008 /* PrivacyInfo.xcprivacy */ = {isa = PBXFileReference; lastKnownFileType = text.xml; path = PrivacyInfo.xcprivacy; sourceTree = "<group>"; };
+		220000000000000000000009 /* ExtensionInfo.plist */ = {isa = PBXFileReference; lastKnownFileType = text.plist.xml; path = ExtensionInfo.plist; sourceTree = "<group>"; };
 		200000000000000000000020 /* SkillingTime.app */ = {isa = PBXFileReference; explicitFileType = wrapper.application; includeInIndex = 0; path = SkillingTime.app; sourceTree = BUILT_PRODUCTS_DIR; };
 		200000000000000000000021 /* SkillingTimeTests.xctest */ = {isa = PBXFileReference; explicitFileType = wrapper.cfbundle; includeInIndex = 0; path = SkillingTimeTests.xctest; sourceTree = BUILT_PRODUCTS_DIR; };
 		210000000000000000000010 /* SkillingTimeWidgets.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SkillingTimeWidgets.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		220000000000000000000010 /* SkillingTimeWatch.app */ = {isa = PBXFileReference; explicitFileType = "wrapper.application.watchapp2"; includeInIndex = 0; path = SkillingTimeWatch.app; sourceTree = BUILT_PRODUCTS_DIR; };
+		220000000000000000000011 /* SkillingTimeWatchExtension.appex */ = {isa = PBXFileReference; explicitFileType = "wrapper.app-extension"; includeInIndex = 0; path = SkillingTimeWatchExtension.appex; sourceTree = BUILT_PRODUCTS_DIR; };
 		230000000000000000000001 /* WatchConnectivity.framework */ = {isa = PBXFileReference; lastKnownFileType = wrapper.framework; name = WatchConnectivity.framework; path = System/Library/Frameworks/WatchConnectivity.framework; sourceTree = SDKROOT; };
 /* End PBXFileReference section */
 
@@ -232,6 +255,7 @@
 				200000000000000000000020 /* SkillingTime.app */,
 				210000000000000000000010 /* SkillingTimeWidgets.appex */,
 				220000000000000000000010 /* SkillingTimeWatch.app */,
+				220000000000000000000011 /* SkillingTimeWatchExtension.appex */,
 				200000000000000000000021 /* SkillingTimeTests.xctest */,
 			);
 			name = Products;
@@ -362,6 +386,7 @@
 				220000000000000000000006 /* SkillingTimeWatch.entitlements */,
 				220000000000000000000007 /* Assets.xcassets */,
 				220000000000000000000008 /* PrivacyInfo.xcprivacy */,
+				220000000000000000000009 /* ExtensionInfo.plist */,
 			);
 			path = SkillingTimeWatch;
 			sourceTree = "<group>";
@@ -424,9 +449,9 @@
 			productReference = 210000000000000000000010 /* SkillingTimeWidgets.appex */;
 			productType = "com.apple.product-type.app-extension";
 		};
-		A00000000000000000000050 /* SkillingTimeWatch */ = {
+		A00000000000000000000050 /* SkillingTimeWatchExtension */ = {
 			isa = PBXNativeTarget;
-			buildConfigurationList = A00000000000000000000024 /* Build configuration list for PBXNativeTarget "SkillingTimeWatch" */;
+			buildConfigurationList = A00000000000000000000024 /* Build configuration list for PBXNativeTarget "SkillingTimeWatchExtension" */;
 			buildPhases = (
 				A0000000000000000000001B /* Sources */,
 				A0000000000000000000001C /* Frameworks */,
@@ -435,6 +460,23 @@
 			buildRules = (
 			);
 			dependencies = (
+			);
+			name = SkillingTimeWatchExtension;
+			productName = SkillingTimeWatchExtension;
+			productReference = 220000000000000000000011 /* SkillingTimeWatchExtension.appex */;
+			productType = "com.apple.product-type.watchkit2-extension";
+		};
+		A00000000000000000000051 /* SkillingTimeWatch */ = {
+			isa = PBXNativeTarget;
+			buildConfigurationList = A00000000000000000000025 /* Build configuration list for PBXNativeTarget "SkillingTimeWatch" */;
+			buildPhases = (
+				A0000000000000000000001F /* Watch App Resources */,
+				A0000000000000000000001E /* Embed App Extensions */,
+			);
+			buildRules = (
+			);
+			dependencies = (
+				A00000000000000000000037 /* PBXTargetDependency */,
 			);
 			name = SkillingTimeWatch;
 			productName = SkillingTimeWatch;
@@ -479,6 +521,9 @@
 							};
 						};
 					};
+					A00000000000000000000051 = {
+						CreatedOnToolsVersion = 16.0;
+					};
 				};
 			};
 			buildConfigurationList = A00000000000000000000020 /* Build configuration list for PBXProject "SkillingTime" */;
@@ -496,7 +541,8 @@
 			targets = (
 				A00000000000000000000010 /* SkillingTime */,
 				A00000000000000000000040 /* SkillingTimeWidgets */,
-				A00000000000000000000050 /* SkillingTimeWatch */,
+				A00000000000000000000051 /* SkillingTimeWatch */,
+				A00000000000000000000050 /* SkillingTimeWatchExtension */,
 				A00000000000000000000011 /* SkillingTimeTests */,
 			);
 		};
@@ -526,6 +572,15 @@
 			files = (
 				330000000000000000000009 /* Assets.xcassets in Resources */,
 				33000000000000000000000A /* PrivacyInfo.xcprivacy in Resources */,
+			);
+			runOnlyForDeploymentPostprocessing = 0;
+		};
+		A0000000000000000000001F /* Watch App Resources */ = {
+			isa = PBXResourcesBuildPhase;
+			buildActionMask = 2147483647;
+			files = (
+				33000000000000000000000B /* Assets.xcassets in Watch App Resources */,
+				33000000000000000000000C /* PrivacyInfo.xcprivacy in Watch App Resources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -628,7 +683,12 @@
 			platformFilters = (
 				iphoneos,
 			);
-			target = A00000000000000000000050 /* SkillingTimeWatch */;
+			target = A00000000000000000000051 /* SkillingTimeWatch */;
+			targetProxy = A00000000000000000000036 /* PBXContainerItemProxy */;
+		};
+		A00000000000000000000037 /* PBXTargetDependency */ = {
+			isa = PBXTargetDependency;
+			target = A00000000000000000000050 /* SkillingTimeWatchExtension */;
 			targetProxy = A00000000000000000000034 /* PBXContainerItemProxy */;
 		};
 /* End PBXTargetDependency section */
@@ -904,22 +964,23 @@
 		400000000000000000000009 /* Debug */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = SkillingTimeWatch/SkillingTimeWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 7;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = SkillingTimeWatch/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SkillingTimeWatch/ExtensionInfo.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
 				);
 				MARKETING_VERSION = 0.5.1;
-				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.watchkitapp;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.watchkitapp.watchkitextension;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -931,22 +992,65 @@
 		40000000000000000000000A /* Release */ = {
 			isa = XCBuildConfiguration;
 			buildSettings = {
-				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = SkillingTimeWatch/SkillingTimeWatch.entitlements;
 				CODE_SIGN_STYLE = Automatic;
 				CURRENT_PROJECT_VERSION = 7;
 				ENABLE_PREVIEWS = YES;
-				GENERATE_INFOPLIST_FILE = NO;
-				INFOPLIST_FILE = SkillingTimeWatch/Info.plist;
+				GENERATE_INFOPLIST_FILE = YES;
+				INFOPLIST_FILE = SkillingTimeWatch/ExtensionInfo.plist;
 				LD_RUNPATH_SEARCH_PATHS = (
 					"$(inherited)",
 					"@executable_path/Frameworks",
+					"@executable_path/../../Frameworks",
 				);
+				MARKETING_VERSION = 0.5.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.watchkitapp.watchkitextension;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Release;
+		};
+		40000000000000000000000B /* Debug */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SkillingTimeWatch/Info.plist;
 				MARKETING_VERSION = 0.5.1;
 				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.watchkitapp;
 				PRODUCT_NAME = "$(TARGET_NAME)";
 				SDKROOT = watchos;
-				SKIP_INSTALL = NO;
+				SKIP_INSTALL = YES;
+				SUPPORTED_PLATFORMS = "watchos watchsimulator";
+				SWIFT_EMIT_LOC_STRINGS = YES;
+				SWIFT_VERSION = 5.0;
+				TARGETED_DEVICE_FAMILY = 4;
+				WATCHOS_DEPLOYMENT_TARGET = 10.0;
+			};
+			name = Debug;
+		};
+		40000000000000000000000C /* Release */ = {
+			isa = XCBuildConfiguration;
+			buildSettings = {
+				ASSETCATALOG_COMPILER_APPICON_NAME = AppIcon;
+				CODE_SIGN_STYLE = Automatic;
+				CURRENT_PROJECT_VERSION = 7;
+				GENERATE_INFOPLIST_FILE = NO;
+				INFOPLIST_FILE = SkillingTimeWatch/Info.plist;
+				MARKETING_VERSION = 0.5.1;
+				PRODUCT_BUNDLE_IDENTIFIER = com.projectskillbook.app.watchkitapp;
+				PRODUCT_NAME = "$(TARGET_NAME)";
+				SDKROOT = watchos;
+				SKIP_INSTALL = YES;
 				SUPPORTED_PLATFORMS = "watchos watchsimulator";
 				SWIFT_EMIT_LOC_STRINGS = YES;
 				SWIFT_VERSION = 5.0;
@@ -994,11 +1098,20 @@
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
 		};
-		A00000000000000000000024 /* Build configuration list for PBXNativeTarget "SkillingTimeWatch" */ = {
+		A00000000000000000000024 /* Build configuration list for PBXNativeTarget "SkillingTimeWatchExtension" */ = {
 			isa = XCConfigurationList;
 			buildConfigurations = (
 				400000000000000000000009 /* Debug */,
 				40000000000000000000000A /* Release */,
+			);
+			defaultConfigurationIsVisible = 0;
+			defaultConfigurationName = Release;
+		};
+		A00000000000000000000025 /* Build configuration list for PBXNativeTarget "SkillingTimeWatch" */ = {
+			isa = XCConfigurationList;
+			buildConfigurations = (
+				40000000000000000000000B /* Debug */,
+				40000000000000000000000C /* Release */,
 			);
 			defaultConfigurationIsVisible = 0;
 			defaultConfigurationName = Release;
