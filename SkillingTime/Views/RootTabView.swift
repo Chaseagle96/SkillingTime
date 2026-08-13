@@ -8,8 +8,11 @@ struct RootTabView: View {
     @EnvironmentObject private var sessionController: SessionController
     @EnvironmentObject private var liveActivityCoordinator: LiveActivityCoordinator
     @EnvironmentObject private var notificationManager: ProgressionNotificationManager
+    @EnvironmentObject private var watchConnectivity: SkillingTimeWatchConnectivity
     @Query(sort: \LifeSkill.sortOrder) private var skills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
+    @Query(sort: \ActivityDayLedger.dayStart, order: .reverse)
+    private var dayLedgers: [ActivityDayLedger]
     @Query(sort: \QuestAssignment.periodStart, order: .reverse)
     private var questAssignments: [QuestAssignment]
 
@@ -78,6 +81,7 @@ struct RootTabView: View {
         }
         .onOpenURL(perform: handleDeepLink)
         .task {
+            watchConnectivity.activate()
             var preparationFailures: [String] = []
             do {
                 try seedBuiltInSkillsIfNeeded()
@@ -116,10 +120,16 @@ struct RootTabView: View {
             if let storageError = sessionController.storageErrorMessage {
                 persistenceError = storageError
             }
+            await processWatchCommands()
             await synchronizeAmbientSession()
         }
         .onChange(of: sessionController.activeSession) { _, _ in
             synchronizeAmbientSessionSoon()
+        }
+        .onChange(of: watchConnectivity.incomingCommandVersion) { _, _ in
+            Task {
+                await processWatchCommands()
+            }
         }
         .onChange(of: ledgerFingerprints) { _, _ in
             synchronizeAmbientSessionSoon()
@@ -140,6 +150,9 @@ struct RootTabView: View {
                 _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
             } catch {
                 persistenceError = "The Questboard could not refresh. \(error.localizedDescription)"
+            }
+            Task {
+                await processWatchCommands()
             }
             synchronizeAmbientSessionSoon()
         }
@@ -338,6 +351,222 @@ struct RootTabView: View {
             snapshot: snapshot,
             skill: skill,
             baseTotalSeconds: baseSeconds
+        )
+        watchConnectivity.publish(makeWatchState())
+    }
+
+    private func makeWatchState() -> WatchStateSnapshot {
+        let watchSkills = skills
+            .filter { !$0.isArchived }
+            .map { skill in
+                let ledger = ledgers.first { $0.skillID == skill.id }
+                let totalSeconds = ledger?.totalActiveSeconds ?? 0
+                let totalXP = ProgressionEngine.xp(
+                    forActiveSeconds: totalSeconds,
+                    curveVersion: skill.progressionCurveVersion
+                )
+                let progress = ProgressionEngine.progress(
+                    forTotalXP: totalXP,
+                    curveVersion: skill.progressionCurveVersion
+                )
+
+                return WatchSkillSnapshot(
+                    id: skill.id,
+                    name: skill.name,
+                    symbolName: skill.symbolName,
+                    accentHex: skill.accentHex,
+                    level: progress.level,
+                    rankName: progress.displayRank,
+                    totalXP: totalXP,
+                    xpIntoLevel: progress.currentLevelXP,
+                    xpForNextLevel: progress.nextLevelXP,
+                    progressFraction: progress.fractionComplete,
+                    totalActiveSeconds: totalSeconds,
+                    sessionCount: ledger?.sessionCount ?? 0,
+                    sortOrder: skill.sortOrder
+                )
+            }
+            .sorted {
+                if $0.sortOrder != $1.sortOrder { return $0.sortOrder < $1.sortOrder }
+                return $0.name.localizedCaseInsensitiveCompare($1.name) == .orderedAscending
+            }
+
+        let activeSkillSnapshot = sessionController.activeSession.flatMap { snapshot in
+            watchSkills.first { $0.id == snapshot.skillID }
+        }
+        let currentQuests = QuestEngine.currentStatuses(assignments: questAssignments)
+            .prefix(5)
+            .map { status in
+                WatchQuestSnapshot(
+                    id: status.id,
+                    title: status.title,
+                    cadenceTitle: status.cadence.title,
+                    progressLabel: status.progressLabel,
+                    fractionComplete: status.fractionComplete,
+                    isComplete: status.isComplete
+                )
+            }
+
+        let today = dayLedgers.first { Calendar.current.isDateInToday($0.dayStart) }
+        return WatchStateSnapshot(
+            schemaVersion: SkillingTimeWatchSync.schemaVersion,
+            revision: 0,
+            generatedAt: .now,
+            skills: watchSkills,
+            activeSession: sessionController.activeSession,
+            activeSkill: activeSkillSnapshot,
+            todayActiveSeconds: today?.totalActiveSeconds,
+            streakDays: nil,
+            quests: Array(currentQuests),
+            lastCompletion: nil,
+            statusMessage: nil
+        )
+    }
+
+    @MainActor
+    private func processWatchCommands() async {
+        let commands = watchConnectivity.takeIncomingCommands()
+        guard !commands.isEmpty else { return }
+
+        for command in commands {
+            let result = apply(command)
+            watchConnectivity.recordCommandResult(result)
+            await synchronizeAmbientSession()
+        }
+    }
+
+    @MainActor
+    private func apply(_ command: WatchSessionCommand) -> WatchCommandResult {
+        switch command.kind {
+        case .start:
+            guard let skillID = command.skillID,
+                  skills.contains(where: { $0.id == skillID && !$0.isArchived }) else {
+                return WatchCommandResult(
+                    commandID: command.id,
+                    accepted: false,
+                    message: "That Skill is no longer available.",
+                    stateRevision: nil
+                )
+            }
+            guard sessionController.start(skillID: skillID) else {
+                return WatchCommandResult(
+                    commandID: command.id,
+                    accepted: false,
+                    message: "Finish the current Skilling session first.",
+                    stateRevision: nil
+                )
+            }
+            return WatchCommandResult(
+                commandID: command.id,
+                accepted: true,
+                message: "Skilling session started.",
+                stateRevision: nil
+            )
+
+        case .pause:
+            guard matchesCurrentSession(command) else {
+                return staleCommandResult(for: command)
+            }
+            sessionController.pause()
+            return acceptedCommandResult(for: command, message: "Session paused.")
+
+        case .resume:
+            guard matchesCurrentSession(command) else {
+                return staleCommandResult(for: command)
+            }
+            sessionController.resume()
+            return acceptedCommandResult(for: command, message: "Session resumed.")
+
+        case .complete:
+            guard matchesCurrentSession(command),
+                  let snapshot = sessionController.activeSession,
+                  let skill = skills.first(where: { $0.id == snapshot.skillID }) else {
+                return staleCommandResult(for: command)
+            }
+            guard let draft = sessionController.requestFinish() else {
+                return WatchCommandResult(
+                    commandID: command.id,
+                    accepted: false,
+                    message: "The session is already being saved.",
+                    stateRevision: nil
+                )
+            }
+
+            do {
+                let outcome = try SessionCommitService.commit(
+                    draft: draft,
+                    countedSeconds: draft.activeSeconds,
+                    note: "",
+                    source: .timer,
+                    skill: skill,
+                    in: modelContext
+                )
+                sessionController.markCommitted(sessionID: draft.id)
+                let completion = WatchCompletionSnapshot(
+                    sessionID: outcome.id,
+                    skillID: outcome.skillID,
+                    skillName: outcome.skillName,
+                    durationSeconds: outcome.durationSeconds,
+                    xpEarned: outcome.xpEarned,
+                    endingLevel: outcome.endingProgress.level,
+                    endingRankName: outcome.endingProgress.displayRank,
+                    completedAt: .now
+                )
+                watchConnectivity.setLastCompletion(completion)
+                return WatchCommandResult(
+                    commandID: command.id,
+                    accepted: true,
+                    message: outcome.wasAlreadyCommitted
+                        ? "Session was already recorded."
+                        : "Session complete. +\(outcome.xpEarned) XP.",
+                    stateRevision: nil
+                )
+            } catch {
+                sessionController.cancelFinish(shouldResume: true)
+                return WatchCommandResult(
+                    commandID: command.id,
+                    accepted: false,
+                    message: "The session could not be saved yet.",
+                    stateRevision: nil
+                )
+            }
+
+        case .cancel:
+            guard matchesCurrentSession(command) else {
+                return staleCommandResult(for: command)
+            }
+            sessionController.discard()
+            return acceptedCommandResult(for: command, message: "Session cancelled.")
+
+        case .refresh:
+            return acceptedCommandResult(for: command, message: "Watch state refreshed.")
+        }
+    }
+
+    private func matchesCurrentSession(_ command: WatchSessionCommand) -> Bool {
+        guard let current = sessionController.activeSession,
+              let sessionID = command.sessionID else { return false }
+        return current.id == sessionID
+    }
+
+    private func staleCommandResult(for command: WatchSessionCommand) -> WatchCommandResult {
+        WatchCommandResult(
+            commandID: command.id,
+            accepted: false,
+            message: "This Watch session is out of date. It has been refreshed.",
+            stateRevision: nil
+        )
+    }
+
+    private func acceptedCommandResult(
+        for command: WatchSessionCommand,
+        message: String
+    ) -> WatchCommandResult {
+        WatchCommandResult(
+            commandID: command.id,
+            accepted: true,
+            message: message,
+            stateRevision: nil
         )
     }
 

@@ -33,6 +33,8 @@ jobs:
           xcodebuild -showsdks
           xcrun --sdk iphoneos --show-sdk-path
           xcrun --sdk iphoneos --show-sdk-version
+          xcrun --sdk watchos --show-sdk-path
+          xcrun --sdk watchos --show-sdk-version
           xcrun simctl list devices available
 
       - name: Validate Xcode project and scheme
@@ -40,6 +42,14 @@ jobs:
           set -euxo pipefail
           test -f SkillingTime.xcodeproj/project.pbxproj
           test -f SkillingTime.xcodeproj/xcshareddata/xcschemes/SkillingTime.xcscheme
+          test -f SkillingTime.xcodeproj/xcshareddata/xcschemes/SkillingTimeWatch.xcscheme
+          test -d SkillingTimeWatch
+          grep -Fq 'com.apple.product-type.application.watchapp2' SkillingTime.xcodeproj/project.pbxproj
+          grep -Fq 'Embed Watch Content' SkillingTime.xcodeproj/project.pbxproj
+          grep -Fq 'WatchConnectivity.framework' SkillingTime.xcodeproj/project.pbxproj
+          grep -Fq 'WKCompanionAppBundleIdentifier' SkillingTimeWatch/Info.plist
+          grep -Fq 'WatchStateSnapshot' SkillingTime/Shared/SkillingTimeWatchModels.swift
+          grep -Fq 'WatchSessionCommand' SkillingTime/Shared/SkillingTimeWatchModels.swift
           grep -Fq 'ActivityConfiguration(for: SkillingTimeActivityAttributes.self)' \
             SkillingTimeWidgets/SkillingTimeLiveActivityWidget.swift
           grep -Fq 'SkillingTimeLiveActivityWidget()' \
@@ -55,6 +65,12 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -showBuildSettings | tee "$RUNNER_TEMP/build-settings.txt"
+          xcodebuild \
+            -project SkillingTime.xcodeproj \
+            -scheme SkillingTimeWatch \
+            -configuration Release \
+            -sdk watchsimulator \
+            -showBuildSettings | tee "$RUNNER_TEMP/watch-build-settings.txt"
 
       - name: Run progression, Character, Questboard, motion, and migration tests
         run: |
@@ -168,6 +184,52 @@ jobs:
 
           echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 
+      - name: Build Watch application without distribution signing
+        run: |
+          set -euxo pipefail
+          WATCH_DERIVED_DATA="$RUNNER_TEMP/SkillingTimeWatchDerivedData"
+          xcodebuild \
+            -project SkillingTime.xcodeproj \
+            -scheme SkillingTimeWatch \
+            -configuration Release \
+            -sdk watchsimulator \
+            -destination 'generic/platform=watchOS Simulator' \
+            -derivedDataPath "$WATCH_DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build | tee "$RUNNER_TEMP/xcodebuild-watch.log"
+
+          WATCH_APP="$WATCH_DERIVED_DATA/Build/Products/Release-watchsimulator/SkillingTimeWatch.app"
+          WATCH_EXEC="$WATCH_APP/SkillingTimeWatch"
+          test -d "$WATCH_APP" || {
+            echo 'ERROR: SkillingTimeWatch.app was not produced'
+            find "$WATCH_DERIVED_DATA/Build/Products" -maxdepth 4 -print
+            exit 1
+          }
+          test -x "$WATCH_EXEC" || { echo 'ERROR: Watch executable is missing'; exit 1; }
+          plutil -lint "$WATCH_APP/Info.plist"
+          WATCH_BUNDLE_ID=$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCH_APP/Info.plist")
+          WATCH_COMPANION_ID=$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCH_APP/Info.plist")
+          test "$WATCH_BUNDLE_ID" = 'com.projectskillbook.app.watchkitapp'
+          test "$WATCH_COMPANION_ID" = 'com.projectskillbook.app'
+          WATCH_FILE=$(file "$WATCH_EXEC")
+          echo "$WATCH_FILE"
+          echo "$WATCH_FILE" | grep -q 'Mach-O' || { echo 'ERROR: Watch executable is not Mach-O'; exit 1; }
+          WATCH_ARCHS=$(lipo -archs "$WATCH_EXEC")
+          echo "Watch architectures: $WATCH_ARCHS"
+          echo "$WATCH_ARCHS" | grep -qw arm64 || { echo 'ERROR: Watch executable lacks arm64'; exit 1; }
+
+          {
+            echo "Watch app: $WATCH_APP"
+            echo "Watch bundle identifier: $WATCH_BUNDLE_ID"
+            echo "Watch companion identifier: $WATCH_COMPANION_ID"
+            echo "Watch executable: $WATCH_FILE"
+            echo "Watch architectures: $WATCH_ARCHS"
+          } | tee "$RUNNER_TEMP/watch-validation.txt"
+
+          echo "WATCH_APP_PATH=$WATCH_APP" >> "$GITHUB_ENV"
+
       - name: Package standard unsigned IPA
         run: |
           set -euxo pipefail
@@ -193,23 +255,32 @@ jobs:
           grep -Fq 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/SkillingTimeWidgets' "$RUNNER_TEMP/ipa-contents.txt" || {
             echo 'ERROR: IPA does not contain the WidgetKit extension executable'; exit 1;
           }
+          grep -Fq 'Payload/SkillingTime.app/Watch/SkillingTimeWatch.app/' "$RUNNER_TEMP/ipa-contents.txt" || {
+            echo 'ERROR: IPA does not contain the embedded Watch application'; exit 1;
+          }
 
           rm -rf "$RUNNER_TEMP/ipa-inspect"
           mkdir -p "$RUNNER_TEMP/ipa-inspect"
           unzip -q "$IPA_NAME" -d "$RUNNER_TEMP/ipa-inspect"
           IPA_APP="$RUNNER_TEMP/ipa-inspect/Payload/SkillingTime.app"
           IPA_EXT="$IPA_APP/PlugIns/SkillingTimeWidgets.appex"
+          IPA_WATCH="$IPA_APP/Watch/SkillingTimeWatch.app"
 
           plutil -lint "$IPA_APP/Info.plist"
           plutil -lint "$IPA_EXT/Info.plist"
+          plutil -lint "$IPA_WATCH/Info.plist"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSSupportsLiveActivities' "$IPA_APP/Info.plist")" = "true"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIColorName' "$IPA_APP/Info.plist")" = "LaunchBackground"
           test "$(/usr/libexec/PlistBuddy -c 'Print :UILaunchScreen:UIImageName' "$IPA_APP/Info.plist")" = "LaunchMark"
           test "$(/usr/libexec/PlistBuddy -c 'Print :NSExtension:NSExtensionPointIdentifier' "$IPA_EXT/Info.plist")" = "com.apple.widgetkit-extension"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$IPA_WATCH/Info.plist")" = "com.projectskillbook.app.watchkitapp"
+          test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$IPA_WATCH/Info.plist")" = "com.projectskillbook.app"
           file "$IPA_APP/SkillingTime" | grep -q 'Mach-O'
           file "$IPA_EXT/SkillingTimeWidgets" | grep -q 'Mach-O'
+          file "$IPA_WATCH/SkillingTimeWatch" | grep -q 'Mach-O'
           lipo -archs "$IPA_APP/SkillingTime" | grep -qw arm64
           lipo -archs "$IPA_EXT/SkillingTimeWidgets" | grep -qw arm64
+          lipo -archs "$IPA_WATCH/SkillingTimeWatch" | grep -qw arm64
 
           shasum -a 256 "$IPA_NAME" | tee "$IPA_NAME.sha256"
           cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.5.1-The-Awakening-validation.txt
@@ -222,6 +293,7 @@ jobs:
             SkillingTime-v0.5.1-The-Awakening.ipa
             SkillingTime-v0.5.1-The-Awakening.ipa.sha256
             SkillingTime-v0.5.1-The-Awakening-validation.txt
+            ${{ runner.temp }}/watch-validation.txt
           if-no-files-found: error
           retention-days: 30
 
@@ -233,8 +305,11 @@ jobs:
           path: |
             ${{ runner.temp }}/xcodebuild-tests.log
             ${{ runner.temp }}/xcodebuild.log
+            ${{ runner.temp }}/xcodebuild-watch.log
             ${{ runner.temp }}/build-settings.txt
+            ${{ runner.temp }}/watch-build-settings.txt
             ${{ runner.temp }}/bundle-validation.txt
+            ${{ runner.temp }}/watch-validation.txt
             ${{ runner.temp }}/ipa-contents.txt
           if-no-files-found: ignore
           retention-days: 7

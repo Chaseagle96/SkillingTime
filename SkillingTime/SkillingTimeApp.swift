@@ -6,6 +6,7 @@ struct SkillingTimeApp: App {
     @StateObject private var sessionController = SessionController()
     @StateObject private var liveActivityCoordinator = LiveActivityCoordinator()
     @StateObject private var notificationManager = ProgressionNotificationManager()
+    @StateObject private var watchConnectivity = SkillingTimeWatchConnectivity()
 
     private let modelContainer: ModelContainer = {
         let schema = Schema(versionedSchema: SkillingTimeSchemaV5.self)
@@ -37,6 +38,7 @@ struct SkillingTimeApp: App {
                 .environmentObject(sessionController)
                 .environmentObject(liveActivityCoordinator)
                 .environmentObject(notificationManager)
+                .environmentObject(watchConnectivity)
         }
         .modelContainer(modelContainer)
     }
