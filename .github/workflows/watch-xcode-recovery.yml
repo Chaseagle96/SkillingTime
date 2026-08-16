@@ -13,7 +13,6 @@ jobs:
   repair-and-build:
     runs-on: macos-26
     timeout-minutes: 45
-
     steps:
       - name: Checkout Watch branch
         uses: actions/checkout@v4
@@ -29,65 +28,42 @@ jobs:
 
           project = Path('SkillingTime.xcodeproj/project.pbxproj')
           text = project.read_text()
-
-          # Repair the historical UUID collision between the Watch resource phase
-          # and the phase that embeds the WatchKit extension.
           text = text.replace(
               '\t\tA0000000000000000000001F /* Embed App Extensions */ = {\n\t\t\tisa = PBXCopyFilesBuildPhase;',
-              '\t\tA00000000000000000000038 /* Embed App Extensions */ = {\n\t\t\tisa = PBXCopyFilesBuildPhase;',
-              1,
-          )
+              '\t\tA00000000000000000000038 /* Embed App Extensions */ = {\n\t\t\tisa = PBXCopyFilesBuildPhase;', 1)
           text = text.replace(
               '\t\t\t\tA0000000000000000000001F /* Watch App Resources */,\n\t\t\t\tA0000000000000000000001E /* Embed App Extensions */,',
-              '\t\t\t\tA0000000000000000000001F /* Watch App Resources */,\n\t\t\t\tA00000000000000000000038 /* Embed App Extensions */,',
-              1,
-          )
-
-          # The Watch app is a cross-platform dependency of the iPhone app. Filtering
-          # this relationship to iphoneos prevents Xcode from scheduling the watchOS
-          # product during the iPhone build, so leave the dependency unfiltered.
+              '\t\t\t\tA0000000000000000000001F /* Watch App Resources */,\n\t\t\t\tA00000000000000000000038 /* Embed App Extensions */,', 1)
           text = text.replace(
               '340000000000000000000001 /* SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; platformFilters = (iphoneos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };',
-              '340000000000000000000001 /* SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };',
-              1,
-          )
+              '340000000000000000000001 /* SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };', 1)
           text = text.replace(
               '\t\tA00000000000000000000035 /* PBXTargetDependency */ = {\n\t\t\tisa = PBXTargetDependency;\n\t\t\tplatformFilters = (\n\t\t\t\tiphoneos,\n\t\t\t);\n\t\t\ttarget = A00000000000000000000051 /* SkillingTimeWatch */;',
-              '\t\tA00000000000000000000035 /* PBXTargetDependency */ = {\n\t\t\tisa = PBXTargetDependency;\n\t\t\ttarget = A00000000000000000000051 /* SkillingTimeWatch */;',
-              1,
-          )
-
+              '\t\tA00000000000000000000035 /* PBXTargetDependency */ = {\n\t\t\tisa = PBXTargetDependency;\n\t\t\ttarget = A00000000000000000000051 /* SkillingTimeWatch */;', 1)
           if 'A0000000000000000000001F /* Embed App Extensions */' in text:
               raise SystemExit('Colliding Watch embed phase UUID remains')
           if text.count('A00000000000000000000038 /* Embed App Extensions */') != 2:
               raise SystemExit('Watch extension embed phase is not wired exactly once')
           if 'SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; platformFilters' in text:
               raise SystemExit('Watch embed build file is still platform-filtered')
-          if '\t\t\tplatformFilters = (\n\t\t\t\tiphoneos,' in text:
-              raise SystemExit('Watch target dependency is still platform-filtered')
           project.write_text(text)
 
           scheme = Path('SkillingTime.xcodeproj/xcshareddata/xcschemes/SkillingTime.xcscheme')
           xml = scheme.read_text()
-          watch_entry = '''         <BuildActionEntry
-            buildForTesting = "YES"
-            buildForRunning = "YES"
-            buildForProfiling = "YES"
-            buildForArchiving = "YES"
-            buildForAnalyzing = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A00000000000000000000051"
-               BuildableName = "SkillingTimeWatch.app"
-               BlueprintName = "SkillingTimeWatch"
-               ReferencedContainer = "container:SkillingTime.xcodeproj">
-            </BuildableReference>
-         </BuildActionEntry>
-'''
-          xml = xml.replace(watch_entry, '', 1)
-          scheme.write_text(xml)
+          marker = 'BlueprintIdentifier = "A00000000000000000000051"'
+          if marker in xml:
+              idx = xml.index(marker)
+              start = xml.rfind('         <BuildActionEntry', 0, idx)
+              closing = '         </BuildActionEntry>'
+              end = xml.find(closing, idx)
+              if start < 0 or end < 0:
+                  raise SystemExit('Could not isolate explicit Watch scheme entry')
+              end += len(closing)
+              if end < len(xml) and xml[end] == '\n':
+                  end += 1
+              xml = xml[:start] + xml[end:]
+              scheme.write_text(xml)
           PY
-
           git diff --check
           xcodebuild -project SkillingTime.xcodeproj -list
 
@@ -108,28 +84,15 @@ jobs:
         run: |
           set -euxo pipefail
           DERIVED_DATA="$RUNNER_TEMP/SkillingTimeRecoveryDerivedData"
-          xcodebuild \
-            -project SkillingTime.xcodeproj \
-            -scheme SkillingTime \
-            -configuration Release \
-            -sdk iphoneos \
-            -destination 'generic/platform=iOS' \
-            -derivedDataPath "$DERIVED_DATA" \
-            CODE_SIGNING_ALLOWED=NO \
-            CODE_SIGNING_REQUIRED=NO \
-            CODE_SIGN_IDENTITY='' \
-            build | tee "$RUNNER_TEMP/xcodebuild-recovery.log"
-
+          xcodebuild -project SkillingTime.xcodeproj -scheme SkillingTime -configuration Release -sdk iphoneos -destination 'generic/platform=iOS' -derivedDataPath "$DERIVED_DATA" CODE_SIGNING_ALLOWED=NO CODE_SIGNING_REQUIRED=NO CODE_SIGN_IDENTITY='' build | tee "$RUNNER_TEMP/xcodebuild-recovery.log"
           APP="$DERIVED_DATA/Build/Products/Release-iphoneos/SkillingTime.app"
           WIDGET="$APP/PlugIns/SkillingTimeWidgets.appex"
           WATCH="$APP/Watch/SkillingTimeWatch.app"
           WATCH_EXT="$WATCH/PlugIns/SkillingTimeWatchExtension.appex"
-
           test -d "$APP"
           test -d "$WIDGET"
           test -d "$WATCH" || { echo 'ERROR: embedded Watch app missing'; find "$APP" -maxdepth 6 -print; exit 1; }
           test -d "$WATCH_EXT" || { echo 'ERROR: embedded Watch extension missing'; find "$WATCH" -maxdepth 6 -print; exit 1; }
-
           plutil -lint "$APP/Info.plist"
           plutil -lint "$WIDGET/Info.plist"
           plutil -lint "$WATCH/Info.plist"
