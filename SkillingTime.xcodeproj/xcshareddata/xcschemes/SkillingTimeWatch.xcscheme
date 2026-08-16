@@ -14,9 +14,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A00000000000000000000010"
-               BuildableName = "SkillingTime.app"
-               BlueprintName = "SkillingTime"
+               BlueprintIdentifier = "A00000000000000000000051"
+               BuildableName = "SkillingTimeWatch.app"
+               BlueprintName = "SkillingTimeWatch"
                ReferencedContainer = "container:SkillingTime.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -28,9 +28,9 @@
             buildForAnalyzing = "YES">
             <BuildableReference
                BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A00000000000000000000040"
-               BuildableName = "SkillingTimeWidgets.appex"
-               BlueprintName = "SkillingTimeWidgets"
+               BlueprintIdentifier = "A00000000000000000000050"
+               BuildableName = "SkillingTimeWatchExtension.appex"
+               BlueprintName = "SkillingTimeWatchExtension"
                ReferencedContainer = "container:SkillingTime.xcodeproj">
             </BuildableReference>
          </BuildActionEntry>
@@ -41,17 +41,7 @@
       selectedDebuggerIdentifier = "Xcode.DebuggerFoundation.Debugger.LLDB"
       selectedLauncherIdentifier = "Xcode.DebuggerFoundation.Launcher.LLDB"
       shouldUseLaunchSchemeArgsEnv = "YES">
-      <Testables>
-         <TestableReference skipped = "NO" parallelizable = "YES">
-            <BuildableReference
-               BuildableIdentifier = "primary"
-               BlueprintIdentifier = "A00000000000000000000011"
-               BuildableName = "SkillingTimeTests.xctest"
-               BlueprintName = "SkillingTimeTests"
-               ReferencedContainer = "container:SkillingTime.xcodeproj">
-            </BuildableReference>
-         </TestableReference>
-      </Testables>
+      <Testables/>
    </TestAction>
    <LaunchAction
       buildConfiguration = "Debug"
@@ -66,9 +56,9 @@
       <BuildableProductRunnable runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A00000000000000000000010"
-            BuildableName = "SkillingTime.app"
-            BlueprintName = "SkillingTime"
+            BlueprintIdentifier = "A00000000000000000000051"
+            BuildableName = "SkillingTimeWatch.app"
+            BlueprintName = "SkillingTimeWatch"
             ReferencedContainer = "container:SkillingTime.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>
@@ -82,9 +72,9 @@
       <BuildableProductRunnable runnableDebuggingMode = "0">
          <BuildableReference
             BuildableIdentifier = "primary"
-            BlueprintIdentifier = "A00000000000000000000010"
-            BuildableName = "SkillingTime.app"
-            BlueprintName = "SkillingTime"
+            BlueprintIdentifier = "A00000000000000000000051"
+            BuildableName = "SkillingTimeWatch.app"
+            BlueprintName = "SkillingTimeWatch"
             ReferencedContainer = "container:SkillingTime.xcodeproj">
          </BuildableReference>
       </BuildableProductRunnable>

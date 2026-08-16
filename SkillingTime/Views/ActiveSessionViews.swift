@@ -77,6 +77,7 @@ struct ActiveSessionView: View {
                         sessionController.cancelFinish(
                             shouldResume: draft.shouldResumeOnCancel
                         )
+                        synchronizeLiveActivity(skill: skill)
                         finishDraft = nil
                     },
                     onSave: { countedSeconds, note in
@@ -93,7 +94,11 @@ struct ActiveSessionView: View {
         .alert("Discard this session?", isPresented: $showingDiscardAlert) {
             Button("Keep Session", role: .cancel) {}
             Button("Discard", role: .destructive) {
+                let sessionID = sessionController.activeSession?.id
                 sessionController.discard()
+                if let sessionID {
+                    endLiveActivity(sessionID: sessionID)
+                }
                 dismiss()
             }
         } message: {
@@ -113,6 +118,7 @@ struct ActiveSessionView: View {
             if snapshot.isAwaitingCommit {
                 finishDraft = sessionController.requestFinish()
             }
+            synchronizeLiveActivity(skill: skill, fallbackSnapshot: snapshot)
         }
     }
 
@@ -203,6 +209,7 @@ struct ActiveSessionView: View {
                             } else {
                                 sessionController.pause()
                             }
+                            synchronizeLiveActivity(skill: skill, fallbackSnapshot: snapshot)
                             Haptics.selection()
                         } label: {
                             Label(
@@ -217,6 +224,7 @@ struct ActiveSessionView: View {
 
                         Button {
                             finishDraft = sessionController.requestFinish()
+                            synchronizeLiveActivity(skill: skill, fallbackSnapshot: snapshot)
                         } label: {
                             Label(
                                 snapshot.isAwaitingCommit ? "Review" : "Finish",
@@ -345,6 +353,27 @@ struct ActiveSessionView: View {
         .accessibilityElement(children: .combine)
     }
 
+    private func synchronizeLiveActivity(
+        skill: LifeSkill,
+        fallbackSnapshot: ActiveSessionSnapshot? = nil
+    ) {
+        let snapshot = sessionController.activeSession ?? fallbackSnapshot
+        let totalSeconds = baseTotalSeconds
+        Task { @MainActor in
+            await liveActivityCoordinator.synchronize(
+                snapshot: snapshot,
+                skill: skill,
+                baseTotalSeconds: totalSeconds
+            )
+        }
+    }
+
+    private func endLiveActivity(sessionID: UUID) {
+        Task { @MainActor in
+            await liveActivityCoordinator.end(sessionID: sessionID)
+        }
+    }
+
     private func observeLevel(
         _ newLevel: Int,
         skill: LifeSkill,
@@ -404,6 +433,7 @@ struct ActiveSessionView: View {
                 in: modelContext
             )
             sessionController.markCommitted(sessionID: draft.id)
+            endLiveActivity(sessionID: draft.id)
             outcome = savedOutcome
             finishDraft = nil
             Haptics.sessionComplete()
