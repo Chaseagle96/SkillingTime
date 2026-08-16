@@ -125,7 +125,7 @@
 			name = "Embed Watch Content";
 			runOnlyForDeploymentPostprocessing = 0;
 		};
-		A0000000000000000000001F /* Embed App Extensions */ = {
+		A00000000000000000000038 /* Embed App Extensions */ = {
 			isa = PBXCopyFilesBuildPhase;
 			buildActionMask = 2147483647;
 			dstPath = "";
@@ -471,7 +471,7 @@
 			buildConfigurationList = A00000000000000000000025 /* Build configuration list for PBXNativeTarget "SkillingTimeWatch" */;
 			buildPhases = (
 				A0000000000000000000001F /* Watch App Resources */,
-				A0000000000000000000001E /* Embed App Extensions */,
+				A00000000000000000000038 /* Embed App Extensions */,
 			);
 			buildRules = (
 			);
