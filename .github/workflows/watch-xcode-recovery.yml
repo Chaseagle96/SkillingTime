@@ -21,57 +21,86 @@ jobs:
           ref: codex/add-watch-companion-20260813
           fetch-depth: 0
 
-      - name: Repair colliding Watch build-phase UUIDs
+      - name: Repair Watch project graph
         run: |
           set -euxo pipefail
           python3 - <<'PY'
           from pathlib import Path
 
-          path = Path('SkillingTime.xcodeproj/project.pbxproj')
-          text = path.read_text()
+          project = Path('SkillingTime.xcodeproj/project.pbxproj')
+          text = project.read_text()
 
-          old_phase = '''\t\tA0000000000000000000001F /* Embed App Extensions */ = {
-          \t\t\tisa = PBXCopyFilesBuildPhase;'''
-          new_phase = '''\t\tA00000000000000000000038 /* Embed App Extensions */ = {
-          \t\t\tisa = PBXCopyFilesBuildPhase;'''
+          # Repair the historical UUID collision between the Watch resource phase
+          # and the phase that embeds the WatchKit extension.
+          text = text.replace(
+              '\t\tA0000000000000000000001F /* Embed App Extensions */ = {\n\t\t\tisa = PBXCopyFilesBuildPhase;',
+              '\t\tA00000000000000000000038 /* Embed App Extensions */ = {\n\t\t\tisa = PBXCopyFilesBuildPhase;',
+              1,
+          )
+          text = text.replace(
+              '\t\t\t\tA0000000000000000000001F /* Watch App Resources */,\n\t\t\t\tA0000000000000000000001E /* Embed App Extensions */,',
+              '\t\t\t\tA0000000000000000000001F /* Watch App Resources */,\n\t\t\t\tA00000000000000000000038 /* Embed App Extensions */,',
+              1,
+          )
 
-          old_target_phases = '''\t\t\t\tA0000000000000000000001F /* Watch App Resources */,
-          \t\t\t\tA0000000000000000000001E /* Embed App Extensions */,'''
-          new_target_phases = '''\t\t\t\tA0000000000000000000001F /* Watch App Resources */,
-          \t\t\t\tA00000000000000000000038 /* Embed App Extensions */,'''
+          # The Watch app is a cross-platform dependency of the iPhone app. Filtering
+          # this relationship to iphoneos prevents Xcode from scheduling the watchOS
+          # product during the iPhone build, so leave the dependency unfiltered.
+          text = text.replace(
+              '340000000000000000000001 /* SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; platformFilters = (iphoneos, ); settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };',
+              '340000000000000000000001 /* SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; settings = {ATTRIBUTES = (CodeSignOnCopy, RemoveHeadersOnCopy, ); }; };',
+              1,
+          )
+          text = text.replace(
+              '\t\tA00000000000000000000035 /* PBXTargetDependency */ = {\n\t\t\tisa = PBXTargetDependency;\n\t\t\tplatformFilters = (\n\t\t\t\tiphoneos,\n\t\t\t);\n\t\t\ttarget = A00000000000000000000051 /* SkillingTimeWatch */;',
+              '\t\tA00000000000000000000035 /* PBXTargetDependency */ = {\n\t\t\tisa = PBXTargetDependency;\n\t\t\ttarget = A00000000000000000000051 /* SkillingTimeWatch */;',
+              1,
+          )
 
-          if old_phase in text:
-              text = text.replace(old_phase, new_phase, 1)
-          elif new_phase not in text:
-              raise SystemExit('Could not locate Watch Embed App Extensions phase')
-
-          if old_target_phases in text:
-              text = text.replace(old_target_phases, new_target_phases, 1)
-          elif new_target_phases not in text:
-              raise SystemExit('Could not locate Watch target build-phase list')
-
-          if text.count('A0000000000000000000001F /* Embed App Extensions */') != 0:
-              raise SystemExit('Duplicate/colliding Embed App Extensions UUID remains')
+          if 'A0000000000000000000001F /* Embed App Extensions */' in text:
+              raise SystemExit('Colliding Watch embed phase UUID remains')
           if text.count('A00000000000000000000038 /* Embed App Extensions */') != 2:
-              raise SystemExit('Repaired Embed App Extensions UUID is not referenced exactly twice')
+              raise SystemExit('Watch extension embed phase is not wired exactly once')
+          if 'SkillingTimeWatch.app in Embed Watch Content */ = {isa = PBXBuildFile; fileRef = 220000000000000000000010 /* SkillingTimeWatch.app */; platformFilters' in text:
+              raise SystemExit('Watch embed build file is still platform-filtered')
+          if '\t\t\tplatformFilters = (\n\t\t\t\tiphoneos,' in text:
+              raise SystemExit('Watch target dependency is still platform-filtered')
+          project.write_text(text)
 
-          path.write_text(text)
+          scheme = Path('SkillingTime.xcodeproj/xcshareddata/xcschemes/SkillingTime.xcscheme')
+          xml = scheme.read_text()
+          watch_entry = '''         <BuildActionEntry
+            buildForTesting = "YES"
+            buildForRunning = "YES"
+            buildForProfiling = "YES"
+            buildForArchiving = "YES"
+            buildForAnalyzing = "YES">
+            <BuildableReference
+               BuildableIdentifier = "primary"
+               BlueprintIdentifier = "A00000000000000000000051"
+               BuildableName = "SkillingTimeWatch.app"
+               BlueprintName = "SkillingTimeWatch"
+               ReferencedContainer = "container:SkillingTime.xcodeproj">
+            </BuildableReference>
+         </BuildActionEntry>
+'''
+          xml = xml.replace(watch_entry, '', 1)
+          scheme.write_text(xml)
           PY
 
           git diff --check
-          grep -n -A12 -B3 'A00000000000000000000038' SkillingTime.xcodeproj/project.pbxproj
           xcodebuild -project SkillingTime.xcodeproj -list
 
-      - name: Persist Xcode project repair
+      - name: Persist Watch project repair
         run: |
           set -euxo pipefail
-          if git diff --quiet -- SkillingTime.xcodeproj/project.pbxproj; then
-            echo 'Xcode project already repaired.'
+          if git diff --quiet -- SkillingTime.xcodeproj; then
+            echo 'Watch project graph already repaired.'
           else
             git config user.name 'github-actions[bot]'
             git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-            git add SkillingTime.xcodeproj/project.pbxproj
-            git commit -m 'fix: repair Watch bundle embedding phases'
+            git add SkillingTime.xcodeproj
+            git commit -m 'fix: wire Watch app as cross-platform dependency'
             git push origin HEAD:codex/add-watch-companion-20260813
           fi
 
@@ -98,18 +127,16 @@ jobs:
 
           test -d "$APP"
           test -d "$WIDGET"
-          test -d "$WATCH" || { echo 'ERROR: embedded Watch app missing'; find "$APP" -maxdepth 5 -print; exit 1; }
-          test -d "$WATCH_EXT" || { echo 'ERROR: embedded Watch extension missing'; find "$WATCH" -maxdepth 5 -print; exit 1; }
+          test -d "$WATCH" || { echo 'ERROR: embedded Watch app missing'; find "$APP" -maxdepth 6 -print; exit 1; }
+          test -d "$WATCH_EXT" || { echo 'ERROR: embedded Watch extension missing'; find "$WATCH" -maxdepth 6 -print; exit 1; }
 
           plutil -lint "$APP/Info.plist"
           plutil -lint "$WIDGET/Info.plist"
           plutil -lint "$WATCH/Info.plist"
           plutil -lint "$WATCH_EXT/Info.plist"
-
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCH/Info.plist")" = 'com.projectskillbook.app.watchkitapp'
           test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCH/Info.plist")" = 'com.projectskillbook.app'
           test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCH_EXT/Info.plist")" = 'com.projectskillbook.app.watchkitapp.watchkitextension'
-
           echo "APP_PATH=$APP" >> "$GITHUB_ENV"
 
       - name: Package and verify unsigned IPA
@@ -121,7 +148,6 @@ jobs:
           mkdir -p "$PACKAGE/Payload"
           ditto "$APP_PATH" "$PACKAGE/Payload/SkillingTime.app"
           (cd "$PACKAGE" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/$IPA" Payload)
-
           unzip -t "$IPA"
           unzip -l "$IPA" | tee "$RUNNER_TEMP/ipa-contents.txt"
           grep -Fq 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/' "$RUNNER_TEMP/ipa-contents.txt"
