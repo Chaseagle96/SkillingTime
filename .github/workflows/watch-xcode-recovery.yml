@@ -1,0 +1,148 @@
+name: Repair Watch Embedding and Build IPA
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - codex/add-watch-companion-20260813
+
+permissions:
+  contents: write
+
+jobs:
+  repair-and-build:
+    runs-on: macos-26
+    timeout-minutes: 45
+
+    steps:
+      - name: Checkout Watch branch
+        uses: actions/checkout@v4
+        with:
+          ref: codex/add-watch-companion-20260813
+          fetch-depth: 0
+
+      - name: Repair colliding Watch build-phase UUIDs
+        run: |
+          set -euxo pipefail
+          python3 - <<'PY'
+          from pathlib import Path
+
+          path = Path('SkillingTime.xcodeproj/project.pbxproj')
+          text = path.read_text()
+
+          old_phase = '''\t\tA0000000000000000000001F /* Embed App Extensions */ = {
+          \t\t\tisa = PBXCopyFilesBuildPhase;'''
+          new_phase = '''\t\tA00000000000000000000038 /* Embed App Extensions */ = {
+          \t\t\tisa = PBXCopyFilesBuildPhase;'''
+
+          old_target_phases = '''\t\t\t\tA0000000000000000000001F /* Watch App Resources */,
+          \t\t\t\tA0000000000000000000001E /* Embed App Extensions */,'''
+          new_target_phases = '''\t\t\t\tA0000000000000000000001F /* Watch App Resources */,
+          \t\t\t\tA00000000000000000000038 /* Embed App Extensions */,'''
+
+          if old_phase in text:
+              text = text.replace(old_phase, new_phase, 1)
+          elif new_phase not in text:
+              raise SystemExit('Could not locate Watch Embed App Extensions phase')
+
+          if old_target_phases in text:
+              text = text.replace(old_target_phases, new_target_phases, 1)
+          elif new_target_phases not in text:
+              raise SystemExit('Could not locate Watch target build-phase list')
+
+          if text.count('A0000000000000000000001F /* Embed App Extensions */') != 0:
+              raise SystemExit('Duplicate/colliding Embed App Extensions UUID remains')
+          if text.count('A00000000000000000000038 /* Embed App Extensions */') != 2:
+              raise SystemExit('Repaired Embed App Extensions UUID is not referenced exactly twice')
+
+          path.write_text(text)
+          PY
+
+          git diff --check
+          grep -n -A12 -B3 'A00000000000000000000038' SkillingTime.xcodeproj/project.pbxproj
+          xcodebuild -project SkillingTime.xcodeproj -list
+
+      - name: Persist Xcode project repair
+        run: |
+          set -euxo pipefail
+          if git diff --quiet -- SkillingTime.xcodeproj/project.pbxproj; then
+            echo 'Xcode project already repaired.'
+          else
+            git config user.name 'github-actions[bot]'
+            git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+            git add SkillingTime.xcodeproj/project.pbxproj
+            git commit -m 'fix: repair Watch bundle embedding phases'
+            git push origin HEAD:codex/add-watch-companion-20260813
+          fi
+
+      - name: Build iPhone app with embedded Watch products
+        run: |
+          set -euxo pipefail
+          DERIVED_DATA="$RUNNER_TEMP/SkillingTimeRecoveryDerivedData"
+          xcodebuild \
+            -project SkillingTime.xcodeproj \
+            -scheme SkillingTime \
+            -configuration Release \
+            -sdk iphoneos \
+            -destination 'generic/platform=iOS' \
+            -derivedDataPath "$DERIVED_DATA" \
+            CODE_SIGNING_ALLOWED=NO \
+            CODE_SIGNING_REQUIRED=NO \
+            CODE_SIGN_IDENTITY='' \
+            build | tee "$RUNNER_TEMP/xcodebuild-recovery.log"
+
+          APP="$DERIVED_DATA/Build/Products/Release-iphoneos/SkillingTime.app"
+          WIDGET="$APP/PlugIns/SkillingTimeWidgets.appex"
+          WATCH="$APP/Watch/SkillingTimeWatch.app"
+          WATCH_EXT="$WATCH/PlugIns/SkillingTimeWatchExtension.appex"
+
+          test -d "$APP"
+          test -d "$WIDGET"
+          test -d "$WATCH" || { echo 'ERROR: embedded Watch app missing'; find "$APP" -maxdepth 5 -print; exit 1; }
+          test -d "$WATCH_EXT" || { echo 'ERROR: embedded Watch extension missing'; find "$WATCH" -maxdepth 5 -print; exit 1; }
+
+          plutil -lint "$APP/Info.plist"
+          plutil -lint "$WIDGET/Info.plist"
+          plutil -lint "$WATCH/Info.plist"
+          plutil -lint "$WATCH_EXT/Info.plist"
+
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCH/Info.plist")" = 'com.projectskillbook.app.watchkitapp'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :WKCompanionAppBundleIdentifier' "$WATCH/Info.plist")" = 'com.projectskillbook.app'
+          test "$(/usr/libexec/PlistBuddy -c 'Print :CFBundleIdentifier' "$WATCH_EXT/Info.plist")" = 'com.projectskillbook.app.watchkitapp.watchkitextension'
+
+          echo "APP_PATH=$APP" >> "$GITHUB_ENV"
+
+      - name: Package and verify unsigned IPA
+        run: |
+          set -euxo pipefail
+          IPA='SkillingTime-Watch-Unsigned.ipa'
+          PACKAGE="$RUNNER_TEMP/package"
+          rm -rf "$PACKAGE"
+          mkdir -p "$PACKAGE/Payload"
+          ditto "$APP_PATH" "$PACKAGE/Payload/SkillingTime.app"
+          (cd "$PACKAGE" && /usr/bin/zip -qry "$GITHUB_WORKSPACE/$IPA" Payload)
+
+          unzip -t "$IPA"
+          unzip -l "$IPA" | tee "$RUNNER_TEMP/ipa-contents.txt"
+          grep -Fq 'Payload/SkillingTime.app/PlugIns/SkillingTimeWidgets.appex/' "$RUNNER_TEMP/ipa-contents.txt"
+          grep -Fq 'Payload/SkillingTime.app/Watch/SkillingTimeWatch.app/' "$RUNNER_TEMP/ipa-contents.txt"
+          grep -Fq 'Payload/SkillingTime.app/Watch/SkillingTimeWatch.app/PlugIns/SkillingTimeWatchExtension.appex/' "$RUNNER_TEMP/ipa-contents.txt"
+
+      - name: Upload Watch-enabled IPA
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkillingTime-Watch-Unsigned-IPA
+          path: SkillingTime-Watch-Unsigned.ipa
+          if-no-files-found: error
+          retention-days: 7
+
+      - name: Upload recovery diagnostics on failure
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: SkillingTime-Watch-Recovery-Diagnostics
+          path: |
+            ${{ runner.temp }}/xcodebuild-recovery.log
+            ${{ runner.temp }}/ipa-contents.txt
+          if-no-files-found: ignore
+          retention-days: 7
