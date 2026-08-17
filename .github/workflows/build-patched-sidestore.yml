@@ -41,7 +41,11 @@ jobs:
           test "$actual" = "$expected"
 
       - name: Apply Apple Watch bundle graph patch
-        run: python3 harness/tools/sidestore-watch-support/apply_watch_support.py upstream
+        shell: bash
+        run: |
+          set -euo pipefail
+          python3 harness/tools/sidestore-watch-support/apply_watch_support.py upstream
+          python3 harness/tools/sidestore-watch-support/fix_compile_v2.py upstream
 
       - name: Validate patch
         shell: bash
