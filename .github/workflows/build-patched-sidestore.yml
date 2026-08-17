@@ -47,6 +47,7 @@ jobs:
           python3 harness/tools/sidestore-watch-support/apply_watch_support.py upstream
           python3 harness/tools/sidestore-watch-support/fix_compile_v2.py upstream
           python3 harness/tools/sidestore-watch-support/add_watch_portal_support.py upstream
+          python3 harness/tools/sidestore-watch-support/add_persistent_trace.py upstream
 
       - name: Validate patch
         shell: bash
@@ -58,6 +59,9 @@ jobs:
           git -C upstream/Dependencies/AltSign diff -- Sources > sidestore-watch-altsign.patch
           grep -q 'registeredWatches' upstream/SideStore/Core/Operations/StandaloneOperations/AuthenticationOperation.swift
           grep -q 'deviceType.contains(.appleWatch)' upstream/Dependencies/AltSign/Sources/ALTAppleAPI+Operations.swift
+          grep -q 'SideStoreWatchTrace.log' upstream/SideStore/Core/Operations/PipelineOperations/FetchProvisioningProfilesOperation.swift
+          grep -q 'SIGN_BEGIN' upstream/SideStore/Core/Operations/PipelineOperations/ResignAppOperation.swift
+          grep -q '<key>UIFileSharingEnabled</key>' upstream/AltStore/Info.plist
           test -s sidestore-watch-sidestore.patch
           test -s sidestore-watch-altsign.patch
 
@@ -87,7 +91,7 @@ jobs:
       - name: Upload patched SideStore IPA
         uses: actions/upload-artifact@v4
         with:
-          name: SideStore-Watch-Support-Experimental
+          name: SideStore-Watch-Support-Trace
           path: |
             upstream/SideStore.ipa
             sidestore-watch-build.log
