@@ -33,6 +33,7 @@ jobs:
           set -euo pipefail
           mkdir -p research-output
           REPORT="research-output/nanoregistry-xcode26.2.txt"
+          CANDIDATE_FILE="$(mktemp)"
           : > "$REPORT"
 
           {
@@ -44,15 +45,18 @@ jobs:
             echo "## Candidate framework paths"
           } >> "$REPORT"
 
-          mapfile -t CANDIDATES < <(
-            find /Applications /Library/Developer/CoreSimulator \
-              -path '*NanoRegistry.framework/NanoRegistry' \
-              -type f 2>/dev/null | sort -u || true
-          )
+          find /Applications /Library/Developer/CoreSimulator \
+            -path '*NanoRegistry.framework/NanoRegistry' \
+            -type f 2>/dev/null | sort -u > "$CANDIDATE_FILE" || true
 
-          printf '%s\n' "${CANDIDATES[@]:-<none>}" >> "$REPORT"
+          if [ -s "$CANDIDATE_FILE" ]; then
+            cat "$CANDIDATE_FILE" >> "$REPORT"
+          else
+            echo '<none>' >> "$REPORT"
+          fi
 
-          for BIN in "${CANDIDATES[@]}"; do
+          while IFS= read -r BIN; do
+            [ -n "$BIN" ] || continue
             {
               echo
               echo "============================================================"
@@ -75,7 +79,7 @@ jobs:
                 | grep -Eai -B 4 -A 8 'NRPaired|NRDevice|paired|pairing|watch|udid|unique.*device|device.*identifier|activeDevice' \
                 | head -n 5000 || true
             } >> "$REPORT"
-          done
+          done < "$CANDIDATE_FILE"
 
           {
             echo
@@ -85,6 +89,7 @@ jobs:
               -ipath '*NanoRegistry*' -print 2>/dev/null | sort -u || true
           } >> "$REPORT"
 
+          rm -f "$CANDIDATE_FILE"
           wc -l "$REPORT"
           sed -n '1,240p' "$REPORT"
 
