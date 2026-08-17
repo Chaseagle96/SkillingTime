@@ -2,7 +2,7 @@
 """Add crash-resistant, user-retrievable tracing to the experimental Watch build.
 
 SideStore can disappear during a Watch-enabled install without producing an iOS
-crash report.  This pass writes checkpoints synchronously to
+crash report. This pass writes checkpoints synchronously to
 Documents/SideStoreWatchTrace.log so the last completed stage survives a hard
 termination. SideStore's upstream Info.plist already enables Files document
 sharing and opening documents in place.
@@ -81,7 +81,7 @@ fetch = replace_once(
 fetch = replace_once(
     fetch,
     '                    for child in parent.application.signableChildren {\n                        let childProfile = try await self.prepareProvisioningProfile(\n',
-    '                    for child in parent.application.signableChildren {\n                        appendWatchInstallTrace("CHILD_PROFILE_BEGIN source=\\(child.bundleIdentifier) parent=\\(parent.application.bundleIdentifier) deviceType=\\(child.deviceType.rawValue)")\n                        let childProfile = try await self.prepareProvisioningProfile(\n',
+    '                    for child in parent.application.signableChildren {\n                        appendWatchInstallTrace("CHILD_PROFILE_BEGIN source=\\(child.bundleIdentifier) parent=\\(parent.application.bundleIdentifier) deviceTypes=\\(child.supportedDeviceTypes.rawValue)")\n                        let childProfile = try await self.prepareProvisioningProfile(\n',
     "child profile begin trace",
 )
 fetch = replace_once(
@@ -99,7 +99,7 @@ fetch = replace_once(
 fetch = replace_once(
     fetch,
     '        self.debugLog("[FetchProvisioningProfiles] Registering App ID with name \'\\(preferredName)\' and bundleID \'\\(bundleID)\'...")\n',
-    '        appendWatchInstallTrace("APP_ID_REGISTER_BEGIN bundle=\\(bundleID) source=\\(targetAppBundle.bundleIdentifier) deviceType=\\(targetAppBundle.deviceType.rawValue)")\n        self.debugLog("[FetchProvisioningProfiles] Registering App ID with name \'\\(preferredName)\' and bundleID \'\\(bundleID)\'...")\n',
+    '        appendWatchInstallTrace("APP_ID_REGISTER_BEGIN bundle=\\(bundleID) source=\\(targetAppBundle.bundleIdentifier) deviceTypes=\\(targetAppBundle.supportedDeviceTypes.rawValue)")\n        self.debugLog("[FetchProvisioningProfiles] Registering App ID with name \'\\(preferredName)\' and bundleID \'\\(bundleID)\'...")\n',
     "App ID register begin trace",
 )
 fetch = replace_once(
@@ -111,7 +111,7 @@ fetch = replace_once(
 fetch = replace_once(
     fetch,
     '        self.debugLog("[FetchProvisioningProfiles] Fetching provisioning profile for App ID \\(appID.bundleIdentifier)...")\n',
-    '        appendWatchInstallTrace("PROFILE_REQUEST_BEGIN appID=\\(appID.bundleIdentifier) deviceType=\\(targetAppBundle.deviceType.rawValue)")\n        self.debugLog("[FetchProvisioningProfiles] Fetching provisioning profile for App ID \\(appID.bundleIdentifier)...")\n',
+    '        appendWatchInstallTrace("PROFILE_REQUEST_BEGIN appID=\\(appID.bundleIdentifier) deviceTypes=\\(targetAppBundle.supportedDeviceTypes.rawValue)")\n        self.debugLog("[FetchProvisioningProfiles] Fetching provisioning profile for App ID \\(appID.bundleIdentifier)...")\n',
     "profile request begin trace",
 )
 fetch = replace_once(
