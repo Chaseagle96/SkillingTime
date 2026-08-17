@@ -40,12 +40,13 @@ jobs:
           expected="c0031f042a388a3a2f16549f14c04417a2976765"
           test "$actual" = "$expected"
 
-      - name: Apply Apple Watch bundle graph patch
+      - name: Apply Apple Watch support patches
         shell: bash
         run: |
           set -euo pipefail
           python3 harness/tools/sidestore-watch-support/apply_watch_support.py upstream
           python3 harness/tools/sidestore-watch-support/fix_compile_v2.py upstream
+          python3 harness/tools/sidestore-watch-support/add_watch_portal_support.py upstream
 
       - name: Validate patch
         shell: bash
@@ -53,8 +54,12 @@ jobs:
           set -euo pipefail
           git -C upstream diff --check
           git -C upstream/Dependencies/AltSign diff --check
-          git -C upstream diff -- SideStore/Core/Operations/PipelineOperations
-          git -C upstream/Dependencies/AltSign diff -- Sources/Model/ALTApplication.swift Sources/Model/ALTDevice.swift Sources/ALTSigner.swift
+          git -C upstream diff -- SideStore/Core/Operations > sidestore-watch-sidestore.patch
+          git -C upstream/Dependencies/AltSign diff -- Sources > sidestore-watch-altsign.patch
+          grep -q 'registeredWatches' upstream/SideStore/Core/Operations/StandaloneOperations/AuthenticationOperation.swift
+          grep -q 'deviceType.contains(.appleWatch)' upstream/Dependencies/AltSign/Sources/ALTAppleAPI+Operations.swift
+          test -s sidestore-watch-sidestore.patch
+          test -s sidestore-watch-altsign.patch
 
       - name: Setup Xcode 26.2
         uses: maxim-lobanov/setup-xcode@v1.6.0
@@ -88,4 +93,6 @@ jobs:
             sidestore-watch-build.log
             sidestore-watch-ipa-test.log
             sidestore-watch-ipa.sha256
+            sidestore-watch-sidestore.patch
+            sidestore-watch-altsign.patch
           if-no-files-found: error
