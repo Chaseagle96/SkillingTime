@@ -1,0 +1,103 @@
+name: Inspect NanoRegistry Watch metadata
+
+on:
+  workflow_dispatch:
+  push:
+    branches:
+      - agent/sidestore-watch-support
+    paths:
+      - '.github/workflows/inspect-nanoregistry.yml'
+
+permissions:
+  contents: write
+
+jobs:
+  inspect:
+    runs-on: macos-26
+    timeout-minutes: 20
+
+    steps:
+      - name: Checkout branch
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 1
+
+      - name: Setup Xcode 26.2
+        uses: maxim-lobanov/setup-xcode@v1.6.0
+        with:
+          xcode-version: '26.2'
+
+      - name: Inspect NanoRegistry binaries and metadata
+        shell: bash
+        run: |
+          set -euo pipefail
+          mkdir -p research-output
+          REPORT="research-output/nanoregistry-xcode26.2.txt"
+          : > "$REPORT"
+
+          {
+            echo "# NanoRegistry metadata inspection"
+            echo
+            date -u
+            xcodebuild -version
+            echo
+            echo "## Candidate framework paths"
+          } >> "$REPORT"
+
+          mapfile -t CANDIDATES < <(
+            find /Applications /Library/Developer/CoreSimulator \
+              -path '*NanoRegistry.framework/NanoRegistry' \
+              -type f 2>/dev/null | sort -u || true
+          )
+
+          printf '%s\n' "${CANDIDATES[@]:-<none>}" >> "$REPORT"
+
+          for BIN in "${CANDIDATES[@]}"; do
+            {
+              echo
+              echo "============================================================"
+              echo "BINARY: $BIN"
+              file "$BIN" || true
+              echo
+              echo "## Objective-C / symbol names of interest"
+              nm -m "$BIN" 2>/dev/null \
+                | grep -Eai 'NRPaired|NRDevice|NanoRegistry|paired|pairing|watch|udid|unique.*device|device.*identifier' \
+                | head -n 1200 || true
+              echo
+              echo "## String/selector candidates"
+              strings -a "$BIN" 2>/dev/null \
+                | grep -Eai 'NRPaired|NRDevice|NanoRegistry|paired|pairing|watch|udid|unique.*device|device.*identifier|registry|activeDevice' \
+                | sort -u \
+                | head -n 2500 || true
+              echo
+              echo "## Objective-C metadata excerpts"
+              otool -ov "$BIN" 2>/dev/null \
+                | grep -Eai -B 4 -A 8 'NRPaired|NRDevice|paired|pairing|watch|udid|unique.*device|device.*identifier|activeDevice' \
+                | head -n 5000 || true
+            } >> "$REPORT"
+          done
+
+          {
+            echo
+            echo "## SDK stubs / module files"
+            find /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneOS.platform/Developer/SDKs \
+                 /Applications/Xcode*.app/Contents/Developer/Platforms/iPhoneSimulator.platform/Developer/SDKs \
+              -ipath '*NanoRegistry*' -print 2>/dev/null | sort -u || true
+          } >> "$REPORT"
+
+          wc -l "$REPORT"
+          sed -n '1,240p' "$REPORT"
+
+      - name: Commit inspection report
+        shell: bash
+        run: |
+          set -euo pipefail
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add research-output/nanoregistry-xcode26.2.txt
+          if git diff --cached --quiet; then
+            echo 'No report changes to commit.'
+            exit 0
+          fi
+          git commit -m 'chore: capture NanoRegistry Watch metadata'
+          git push origin HEAD:agent/sidestore-watch-support
