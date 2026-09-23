@@ -183,9 +183,6 @@
 				A00000000000000000000009 /* SkillingTimeTests */,
 				200000000000000000000014 /* README.md */,
 				A00000000000000000000003 /* Products */,
-				210000000000000000000006 /* SkillingTimeHomeWidgets.swift */,
-				210000000000000000000007 /* StartSkillControl.swift */,
-				20000000000000000000002E /* FeatureTests.swift */,
 			);
 			sourceTree = "<group>";
 		};
@@ -212,12 +209,6 @@
 				A00000000000000000000007 /* Theme */,
 				A00000000000000000000008 /* Views */,
 				200000000000000000000012 /* Assets.xcassets */,
-				200000000000000000000028 /* WidgetSnapshot.swift */,
-				200000000000000000000029 /* StartSkillIntents.swift */,
-				20000000000000000000002A /* PracticeInsights.swift */,
-				20000000000000000000002B /* BackupService.swift */,
-				20000000000000000000002C /* SkillingTimeShortcuts.swift */,
-				20000000000000000000002D /* PracticeInsightsViews.swift */,
 			);
 			path = SkillingTime;
 			sourceTree = "<group>";
@@ -248,6 +239,9 @@
 				200000000000000000000025 /* CharacterProgressionEngine.swift */,
 				20000000000000000000001C /* LiveActivityCoordinator.swift */,
 				20000000000000000000001D /* ProgressionNotificationManager.swift */,
+				20000000000000000000002A /* PracticeInsights.swift */,
+				20000000000000000000002B /* BackupService.swift */,
+				20000000000000000000002C /* SkillingTimeShortcuts.swift */,
 			);
 			path = Engine;
 			sourceTree = "<group>";
@@ -273,6 +267,7 @@
 				20000000000000000000000F /* ChronicleViews.swift */,
 				200000000000000000000010 /* QuestViews.swift */,
 				200000000000000000000011 /* CharacterView.swift */,
+				20000000000000000000002D /* PracticeInsightsViews.swift */,
 			);
 			path = Views;
 			sourceTree = "<group>";
@@ -281,6 +276,7 @@
 			isa = PBXGroup;
 			children = (
 				200000000000000000000013 /* ProgressionEngineTests.swift */,
+				20000000000000000000002E /* FeatureTests.swift */,
 			);
 			path = SkillingTimeTests;
 			sourceTree = "<group>";
@@ -291,6 +287,8 @@
 				200000000000000000000019 /* SessionSharedStorage.swift */,
 				20000000000000000000001A /* SkillingTimeActivityAttributes.swift */,
 				20000000000000000000001B /* SkillingTimeLiveActivityIntents.swift */,
+				200000000000000000000028 /* WidgetSnapshot.swift */,
+				200000000000000000000029 /* StartSkillIntents.swift */,
 			);
 			path = Shared;
 			sourceTree = "<group>";
@@ -303,6 +301,8 @@
 				210000000000000000000003 /* Info.plist */,
 				210000000000000000000004 /* SkillingTimeWidgets.entitlements */,
 				210000000000000000000005 /* PrivacyInfo.xcprivacy */,
+				210000000000000000000006 /* SkillingTimeHomeWidgets.swift */,
+				210000000000000000000007 /* StartSkillControl.swift */,
 			);
 			path = SkillingTimeWidgets;
 			sourceTree = "<group>";
