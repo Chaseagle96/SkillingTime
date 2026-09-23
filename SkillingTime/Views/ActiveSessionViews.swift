@@ -11,8 +11,6 @@ struct ActiveSessionView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @EnvironmentObject private var sessionController: SessionController
-    @EnvironmentObject private var liveActivityCoordinator: LiveActivityCoordinator
-    @EnvironmentObject private var notificationManager: ProgressionNotificationManager
     @Query(sort: \LifeSkill.sortOrder) private var skills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
 
@@ -360,18 +358,9 @@ struct ActiveSessionView: View {
         lastObservedLevel = newLevel
         Haptics.levelUp(major: major)
 
-        Task {
-            await liveActivityCoordinator.synchronize(
-                snapshot: sessionController.activeSession ?? snapshot,
-                skill: skill,
-                baseTotalSeconds: baseTotalSeconds
-            )
-            await notificationManager.synchronize(
-                snapshot: sessionController.activeSession ?? snapshot,
-                skill: skill,
-                baseTotalSeconds: baseTotalSeconds
-            )
-        }
+        // RootTabView owns the sync so it includes the active quest and runs in
+        // order with every other Live Activity update.
+        sessionController.requestAmbientSync()
 
         Task { @MainActor in
             try? await Task.sleep(nanoseconds: 2_600_000_000)
@@ -508,12 +497,26 @@ private struct FinishSessionSheet: View {
         (hours * 3600) + (minutes * 60) + seconds
     }
 
+    /// Counted time can be trimmed (for a timer left running) but never raised
+    /// above what the timer recorded, and never above the 48-hour session limit.
+    private var maximumCountedSeconds: Int {
+        min(max(0, initialSeconds), SessionCommitService.maximumSessionSeconds)
+    }
+
+    private var exceedsMaximum: Bool {
+        countedSeconds > maximumCountedSeconds
+    }
+
     var body: some View {
         NavigationStack {
             Form {
                 Section {
                     LabeledContent("Timer", value: DurationText.compact(initialSeconds))
-                    Stepper("Counted hours: \(hours)", value: $hours, in: 0...48)
+                    Stepper(
+                        "Counted hours: \(hours)",
+                        value: $hours,
+                        in: 0...(maximumCountedSeconds / 3600)
+                    )
                     Stepper("Counted minutes: \(minutes)", value: $minutes, in: 0...59)
                     Stepper("Counted seconds: \(seconds)", value: $seconds, in: 0...59)
                     LabeledContent(
@@ -526,7 +529,12 @@ private struct FinishSessionSheet: View {
                 } header: {
                     Text("Time to Count")
                 } footer: {
-                    if initialSeconds >= 6 * 3600 {
+                    if exceedsMaximum {
+                        Text(
+                            "Counted time can't exceed \(DurationText.compact(maximumCountedSeconds)), the time this timer recorded."
+                        )
+                        .foregroundStyle(.red)
+                    } else if initialSeconds >= 6 * 3600 {
                         Text(
                             "This was a long session. Adjust the counted time if the timer was left running by accident."
                         )
@@ -570,7 +578,7 @@ private struct FinishSessionSheet: View {
                             dismiss()
                         }
                     }
-                    .disabled(countedSeconds <= 0)
+                    .disabled(countedSeconds <= 0 || exceedsMaximum)
                 }
             }
             .interactiveDismissDisabled()

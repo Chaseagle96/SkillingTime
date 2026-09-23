@@ -1,82 +1,6 @@
 import Combine
 import Foundation
 
-enum SessionFocusGoalKind: String, Codable, CaseIterable, Sendable {
-    case duration
-    case xp
-    case progression
-}
-
-struct SessionFocusGoal: Codable, Equatable, Sendable {
-    let kind: SessionFocusGoalKind
-    let targetValue: Int
-    let startingTotalXP: Int
-
-    static func duration(seconds: Int, startingTotalXP: Int) -> SessionFocusGoal {
-        SessionFocusGoal(kind: .duration, targetValue: max(1, seconds), startingTotalXP: startingTotalXP)
-    }
-
-    static func xp(amount: Int, startingTotalXP: Int) -> SessionFocusGoal {
-        SessionFocusGoal(kind: .xp, targetValue: max(1, amount), startingTotalXP: startingTotalXP)
-    }
-
-    static func progression(targetTotalXP: Int, startingTotalXP: Int) -> SessionFocusGoal {
-        SessionFocusGoal(
-            kind: .progression,
-            targetValue: max(startingTotalXP + 1, targetTotalXP),
-            startingTotalXP: startingTotalXP
-        )
-    }
-}
-
-struct FocusGoalProgress: Equatable, Sendable {
-    let title: String
-    let currentValue: Int
-    let targetValue: Int
-    let progressLabel: String
-    let fractionComplete: Double
-    let isComplete: Bool
-
-    static func evaluate(
-        goal: SessionFocusGoal,
-        sessionSeconds: Int,
-        liveTotalXP: Int
-    ) -> FocusGoalProgress {
-        let current: Int
-        let target: Int
-        let title: String
-        let label: String
-
-        switch goal.kind {
-        case .duration:
-            current = max(0, sessionSeconds)
-            target = goal.targetValue
-            title = "Practice for \(DurationText.compact(target))"
-            label = "\(DurationText.compact(min(current, target))) of \(DurationText.compact(target))"
-        case .xp:
-            current = max(0, liveTotalXP - goal.startingTotalXP)
-            target = goal.targetValue
-            title = "Earn \(target.formatted()) XP"
-            label = "\(min(current, target).formatted()) of \(target.formatted()) XP"
-        case .progression:
-            current = max(0, liveTotalXP - goal.startingTotalXP)
-            target = max(1, goal.targetValue - goal.startingTotalXP)
-            title = "Reach the next progression threshold"
-            label = "\(min(current, target).formatted()) of \(target.formatted()) XP"
-        }
-
-        let fraction = min(max(Double(current) / Double(max(1, target)), 0), 1)
-        return FocusGoalProgress(
-            title: title,
-            currentValue: current,
-            targetValue: target,
-            progressLabel: label,
-            fractionComplete: fraction,
-            isComplete: current >= target
-        )
-    }
-}
-
 struct ActiveSessionSnapshot: Codable, Equatable, Sendable {
     let id: UUID
     let skillID: UUID
@@ -114,15 +38,22 @@ struct CompletedSessionDraft: Identifiable, Equatable, Sendable {
 final class SessionController: ObservableObject {
     @Published private(set) var activeSession: ActiveSessionSnapshot?
     @Published private(set) var storageErrorMessage: String?
+    /// Incremented when a view needs the Live Activity and progression alert
+    /// refreshed (for example after a level-up). RootTabView performs the sync
+    /// so every refresh includes the current quest and runs in order.
+    @Published private(set) var ambientSyncRequest = 0
 
     private let defaults: UserDefaults
     private let legacyDefaults: UserDefaults?
     private var defaultsObserver: AnyCancellable?
 
     convenience init() {
+        let shared = SkillingTimeSharedConfiguration.makeSharedDefaults()
         self.init(
-            defaults: SkillingTimeSharedConfiguration.makeSharedDefaults(),
-            legacyDefaults: .standard
+            defaults: shared,
+            // Without a working App Group the shared store *is* .standard; treating it
+            // as a separate legacy store would delete the key restore just wrote.
+            legacyDefaults: shared === UserDefaults.standard ? nil : .standard
         )
     }
 
@@ -130,8 +61,10 @@ final class SessionController: ObservableObject {
         self.defaults = defaults
         self.legacyDefaults = legacyDefaults
         restore()
+        // No object filter: the Live Activity intent writes through its own
+        // UserDefaults instance, and filtering by instance would never match it.
         defaultsObserver = NotificationCenter.default
-            .publisher(for: UserDefaults.didChangeNotification, object: defaults)
+            .publisher(for: UserDefaults.didChangeNotification)
             .sink { [weak self] _ in
                 Task { @MainActor in
                     self?.refreshFromSharedStorage()
@@ -147,7 +80,7 @@ final class SessionController: ObservableObject {
     ) -> Bool {
         guard activeSession == nil else { return false }
 
-        activeSession = ActiveSessionSnapshot(
+        let session = ActiveSessionSnapshot(
             id: UUID(),
             skillID: skillID,
             startedAt: date,
@@ -157,8 +90,18 @@ final class SessionController: ObservableObject {
             shouldResumeAfterCancelledFinish: nil,
             focusGoal: focusGoal
         )
+        activeSession = session
         persist()
-        return storageErrorMessage == nil
+        guard storageErrorMessage == nil else {
+            // Never leave a timer running that could not be made recoverable.
+            activeSession = nil
+            return false
+        }
+        return true
+    }
+
+    func requestAmbientSync() {
+        ambientSyncRequest &+= 1
     }
 
     func pause(at date: Date = .now) {
@@ -289,7 +232,9 @@ final class SessionController: ObservableObject {
             }
         } catch {
             activeSession = nil
-            storageErrorMessage = "The previous active timer could not be restored."
+            storageErrorMessage = "The previous active timer could not be restored. Its data was kept aside."
+            // Keep the raw bytes so a later version (or support) can recover them.
+            defaults.set(storedData, forKey: SkillingTimeSharedConfiguration.unreadableActiveSessionKey)
             defaults.removeObject(forKey: currentKey)
             defaults.removeObject(forKey: legacyKey)
         }

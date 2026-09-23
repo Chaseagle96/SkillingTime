@@ -108,33 +108,17 @@ enum RewardResolver {
         )
     }
 
+    /// Global rewards replay sessions in credit order. A Skill contributes to Total
+    /// Level only once it has recorded practice, so creating empty Skills cannot
+    /// earn Total Level achievements.
     private static func resolveGlobalAchievements(
         skills: [LifeSkill],
         skillsByID: [UUID: LifeSkill],
         sessions: [SkillSession]
     ) -> [ResolvedAchievementReward] {
-        var earliestCreditBySkill: [UUID: Date] = [:]
-        for session in sessions {
-            if let existing = earliestCreditBySkill[session.skillID] {
-                if session.creditedAt < existing {
-                    earliestCreditBySkill[session.skillID] = session.creditedAt
-                }
-            } else {
-                earliestCreditBySkill[session.skillID] = session.creditedAt
-            }
-        }
-
-        var events: [GlobalRewardEvent] = skills.map { skill in
-            let activationDate = min(skill.createdAt, earliestCreditBySkill[skill.id] ?? skill.createdAt)
-            return .skill(skill, activationDate)
-        }
-        events.append(contentsOf: sessions.map(GlobalRewardEvent.session))
-        events.sort(by: globalEventOrder)
-
         var unresolved = Dictionary(
             uniqueKeysWithValues: AchievementEngine.globalDefinitions.map { ($0.id, $0) }
         )
-        var createdSkillIDs = Set<UUID>()
         var secondsBySkill: [UUID: Int] = [:]
         var levelsBySkill: [UUID: Int] = [:]
         var totalLevel = 0
@@ -142,34 +126,14 @@ enum RewardResolver {
         var activeSkillIDs = Set<UUID>()
         var results: [ResolvedAchievementReward] = []
 
-        for event in events {
-            let eventDate: Date
-            let triggeringSessionID: UUID?
+        for session in sessions.sorted(by: sessionOrder) {
+            totalSeconds += max(0, session.activeSeconds)
+            if session.activeSeconds > 0 {
+                activeSkillIDs.insert(session.skillID)
+            }
 
-            switch event {
-            case .skill(let skill, let date):
-                eventDate = date
-                triggeringSessionID = nil
-                if createdSkillIDs.insert(skill.id).inserted {
-                    levelsBySkill[skill.id] = 1
-                    totalLevel += 1
-                }
-
-            case .session(let session):
-                eventDate = session.creditedAt
-                triggeringSessionID = session.id
-                totalSeconds += max(0, session.activeSeconds)
-                if session.activeSeconds > 0 {
-                    activeSkillIDs.insert(session.skillID)
-                }
-
-                guard let skill = skillsByID[session.skillID] else { continue }
-                if createdSkillIDs.insert(skill.id).inserted {
-                    levelsBySkill[skill.id] = 1
-                    totalLevel += 1
-                }
-
-                let oldLevel = levelsBySkill[skill.id] ?? 1
+            if let skill = skillsByID[session.skillID] {
+                let oldLevel = levelsBySkill[skill.id] ?? 0
                 secondsBySkill[skill.id, default: 0] += max(0, session.activeSeconds)
                 let newXP = ProgressionEngine.xp(
                     forActiveSeconds: secondsBySkill[skill.id, default: 0],
@@ -200,8 +164,8 @@ enum RewardResolver {
                         ),
                         achievementID: definition.id,
                         skillID: nil,
-                        unlockedAt: eventDate,
-                        triggeringSessionID: triggeringSessionID
+                        unlockedAt: session.creditedAt,
+                        triggeringSessionID: session.id
                     )
                 )
                 unresolved.removeValue(forKey: definition.id)
@@ -248,16 +212,6 @@ enum RewardResolver {
             return lhs.unlockedAt < rhs.unlockedAt
         }
         return lhs.id < rhs.id
-    }
-
-    private static func globalEventOrder(_ lhs: GlobalRewardEvent, _ rhs: GlobalRewardEvent) -> Bool {
-        if lhs.date != rhs.date {
-            return lhs.date < rhs.date
-        }
-        if lhs.priority != rhs.priority {
-            return lhs.priority < rhs.priority
-        }
-        return lhs.identifier < rhs.identifier
     }
 }
 
@@ -317,32 +271,6 @@ private struct SkillRewardState {
             activeMonths.count >= target
         default:
             false
-        }
-    }
-}
-
-private enum GlobalRewardEvent {
-    case skill(LifeSkill, Date)
-    case session(SkillSession)
-
-    var date: Date {
-        switch self {
-        case .skill(_, let date): date
-        case .session(let session): session.creditedAt
-        }
-    }
-
-    var priority: Int {
-        switch self {
-        case .skill: 0
-        case .session: 1
-        }
-    }
-
-    var identifier: String {
-        switch self {
-        case .skill(let skill, _): skill.id.uuidString
-        case .session(let session): session.id.uuidString
         }
     }
 }

@@ -4,6 +4,7 @@ import SwiftUI
 struct SkillDetailView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionController: SessionController
+    @EnvironmentObject private var presenter: ActiveSessionPresenter
     @Query private var sessions: [SkillSession]
     @Query private var chronicleUnlocks: [ChronicleUnlock]
     @Query private var specializations: [SkillSpecialization]
@@ -12,9 +13,13 @@ struct SkillDetailView: View {
 
     let skill: LifeSkill
 
-    @State private var showingActiveSession = false
     @State private var showingManualEntry = false
     @State private var showingFocusGoal = false
+    /// Set by the Focus Goal sheet; the session starts once that sheet is gone so
+    /// the timer screen is never presented while another sheet is still dismissing.
+    @State private var pendingStart: PendingSessionStart?
+    /// Same idea for the summary shown after logging a past session.
+    @State private var pendingManualOutcome: SessionOutcome?
     @State private var showingEditSkill = false
     @State private var showingSpecialization = false
     @State private var showingExpertChallenge = false
@@ -60,9 +65,12 @@ struct SkillDetailView: View {
         SessionAnalytics.statistics(for: skill.id, sessions: sessions)
     }
 
+    /// Uses only the time total. `statistics` also builds a calendar-day set, and
+    /// `progress` is read many times per render.
     private var progress: ProgressSnapshot {
+        let totalSeconds = sessions.reduce(0) { $0 + max(0, $1.activeSeconds) }
         let xp = ProgressionEngine.xp(
-            forActiveSeconds: statistics.totalSeconds,
+            forActiveSeconds: totalSeconds,
             curveVersion: skill.progressionCurveVersion
         )
         return ProgressionEngine.progress(
@@ -141,7 +149,7 @@ struct SkillDetailView: View {
                             )
                         }
                     }
-                    if hasExpertChallengeCapability {
+                    if hasExpertChallengeCapability && !skill.isArchived {
                         Button {
                             showingExpertChallenge = true
                         } label: {
@@ -164,17 +172,25 @@ struct SkillDetailView: View {
                 .accessibilityLabel("Skill options")
             }
         }
-        .fullScreenCover(isPresented: $showingActiveSession) {
-            ActiveSessionView(skillID: skill.id)
-        }
-        .sheet(isPresented: $showingFocusGoal) {
+        .sheet(isPresented: $showingFocusGoal, onDismiss: {
+            if let pendingStart {
+                self.pendingStart = nil
+                startSession(focusGoal: pendingStart.focusGoal)
+            }
+        }) {
             FocusGoalPickerView(skill: skill, progress: progress) { goal in
-                startSession(focusGoal: goal)
+                pendingStart = PendingSessionStart(focusGoal: goal)
+                showingFocusGoal = false
             }
         }
-        .sheet(isPresented: $showingManualEntry) {
+        .sheet(isPresented: $showingManualEntry, onDismiss: {
+            if let pendingManualOutcome {
+                self.pendingManualOutcome = nil
+                sessionOutcome = pendingManualOutcome
+            }
+        }) {
             ManualSessionView(skill: skill) { outcome in
-                sessionOutcome = outcome
+                pendingManualOutcome = outcome
             }
         }
         .sheet(item: $editingSession) { session in
@@ -348,7 +364,8 @@ struct SkillDetailView: View {
     }
 
     private var statisticsGrid: some View {
-        VStack(spacing: 12) {
+        let statistics = self.statistics
+        return VStack(spacing: 12) {
             SectionTitle(
                 title: "Record",
                 subtitle: "Everything here is derived from completed sessions."
@@ -531,7 +548,7 @@ struct SkillDetailView: View {
 
     private func beginOrResumeSession() {
         if sessionController.activeSession?.skillID == skill.id {
-            showingActiveSession = true
+            presenter.present(skillID: skill.id)
             return
         }
         guard sessionController.activeSession == nil else { return }
@@ -546,9 +563,12 @@ struct SkillDetailView: View {
     private func startSession(focusGoal: SessionFocusGoal?) {
         guard sessionController.start(skillID: skill.id, focusGoal: focusGoal) else { return }
         Haptics.sessionStart()
-        showingFocusGoal = false
-        showingActiveSession = true
+        presenter.present(skillID: skill.id)
     }
+}
+
+private struct PendingSessionStart {
+    let focusGoal: SessionFocusGoal?
 }
 
 private struct ExpertChallengeView: View {
@@ -743,6 +763,7 @@ private struct LegacyEditorView: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(SymbolNames.label(for: symbol))
                             .accessibilityAddTraits(
                                 crestSymbolName == symbol ? .isSelected : []
                             )
@@ -1181,10 +1202,8 @@ private struct ManualSessionView: View {
                 skill: skill,
                 in: modelContext
             )
+            onSaved(outcome)
             dismiss()
-            DispatchQueue.main.async {
-                onSaved(outcome)
-            }
         } catch {
             let localized = error as? LocalizedError
             saveError = [localized?.errorDescription, localized?.recoverySuggestion]
@@ -1212,6 +1231,10 @@ private struct SessionEditorView: View {
     @State private var saveError: String?
     @State private var showingUpdateConfirmation = false
     @State private var showingDeleteConfirmation = false
+    /// Previews replay reward history, so they are cached and recomputed only when
+    /// the ended date or duration changes (not on every note keystroke).
+    @State private var impact: SessionMutationImpact?
+    @State private var deletionImpact: SessionMutationImpact?
 
     init(session: SkillSession) {
         self.session = session
@@ -1226,8 +1249,12 @@ private struct SessionEditorView: View {
         (hours * 3600) + (minutes * 60) + seconds
     }
 
-    private var impact: SessionMutationImpact? {
-        try? SessionCommitService.previewUpdate(
+    private var exceedsMaximum: Bool {
+        durationSeconds > SessionCommitService.maximumSessionSeconds
+    }
+
+    private func recomputeImpact() {
+        impact = try? SessionCommitService.previewUpdate(
             session: session,
             endedAt: endedAt,
             activeSeconds: durationSeconds,
@@ -1238,8 +1265,8 @@ private struct SessionEditorView: View {
         )
     }
 
-    private var deletionImpact: SessionMutationImpact? {
-        try? SessionCommitService.previewDeletion(
+    private func recomputeDeletionImpact() {
+        deletionImpact = try? SessionCommitService.previewDeletion(
             session: session,
             skills: skills,
             sessions: sessions,
@@ -1259,6 +1286,11 @@ private struct SessionEditorView: View {
                     Stepper("Hours: \(hours)", value: $hours, in: 0...48)
                     Stepper("Minutes: \(minutes)", value: $minutes, in: 0...59)
                     Stepper("Seconds: \(seconds)", value: $seconds, in: 0...59)
+                    if exceedsMaximum {
+                        Text("A session can be at most \(DurationText.compact(SessionCommitService.maximumSessionSeconds)).")
+                            .font(.caption)
+                            .foregroundStyle(.red)
+                    }
                 }
 
                 Section("Note") {
@@ -1301,6 +1333,12 @@ private struct SessionEditorView: View {
                     }
                     .disabled(durationSeconds <= 0 || impact == nil)
                 }
+            }
+            .task(id: ImpactInputs(endedAt: endedAt, durationSeconds: durationSeconds)) {
+                recomputeImpact()
+            }
+            .task {
+                recomputeDeletionImpact()
             }
             .alert("Apply this correction?", isPresented: $showingUpdateConfirmation) {
                 Button("Cancel", role: .cancel) {}
@@ -1402,4 +1440,9 @@ private struct SessionEditorView: View {
                 .joined(separator: " ")
         }
     }
+}
+
+private struct ImpactInputs: Equatable {
+    let endedAt: Date
+    let durationSeconds: Int
 }

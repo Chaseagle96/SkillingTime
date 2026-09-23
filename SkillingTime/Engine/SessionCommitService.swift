@@ -173,9 +173,11 @@ enum SessionCommitService {
             } else {
                 let safeNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
                 let adjustedStart = draft.endedAt.addingTimeInterval(TimeInterval(-countedSeconds))
-                let beforeSkillSeconds = SessionAnalytics.totalSeconds(
+                let beforeSkillSeconds = skillSeconds(
                     for: skill.id,
-                    sessions: beforeSessions
+                    creditedBefore: draft.endedAt,
+                    excluding: draft.id,
+                    in: beforeSessions
                 )
                 let liveTotalXP = ProgressionEngine.xp(
                     forActiveSeconds: beforeSkillSeconds + countedSeconds,
@@ -365,12 +367,16 @@ enum SessionCommitService {
 
             if let focusGoal = session.recordedFocusGoal,
                let skill = skills.first(where: { $0.id == session.skillID }) {
-                let skillSeconds = SessionAnalytics.totalSeconds(
+                // Measure the goal against XP as of this session's end. Using the
+                // Skill's total today would count every later session toward it.
+                let earlierSeconds = skillSeconds(
                     for: session.skillID,
-                    sessions: sessions
+                    creditedBefore: endedAt,
+                    excluding: session.id,
+                    in: sessions
                 )
                 let totalXP = ProgressionEngine.xp(
-                    forActiveSeconds: skillSeconds,
+                    forActiveSeconds: earlierSeconds + activeSeconds,
                     curveVersion: skill.progressionCurveVersion
                 )
                 session.focusGoalCompletedRawValue = FocusGoalProgress.evaluate(
@@ -491,6 +497,23 @@ enum SessionCommitService {
         } catch {
             modelContext.rollback()
             throw SessionCommitError.persistence(error.localizedDescription)
+        }
+    }
+
+    /// Active seconds a Skill had accumulated before a session ending at `endedAt`,
+    /// using the same (creditedAt, id) ordering as reward resolution.
+    static func skillSeconds(
+        for skillID: UUID,
+        creditedBefore endedAt: Date,
+        excluding sessionID: UUID,
+        in sessions: [SkillSession]
+    ) -> Int {
+        let sessionKey = sessionID.uuidString
+        return sessions.reduce(0) { total, candidate in
+            guard candidate.skillID == skillID, candidate.id != sessionID else { return total }
+            let isEarlier = candidate.creditedAt < endedAt
+                || (candidate.creditedAt == endedAt && candidate.id.uuidString < sessionKey)
+            return isEarlier ? total + max(0, candidate.activeSeconds) : total
         }
     }
 

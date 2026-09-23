@@ -582,6 +582,79 @@ final class SessionCommitServiceTests: XCTestCase {
     }
 
     @MainActor
+    func testEditingEarlierSessionDoesNotCompleteItsFocusGoalFromLaterHistory() throws {
+        let container = try makeContainer()
+        let context = ModelContext(container)
+        let skill = LifeSkill(
+            name: "Reading",
+            symbolName: "book",
+            accentHex: "FFFFFF",
+            category: "Learning"
+        )
+        context.insert(skill)
+        try context.save()
+
+        let firstEnd = Date(timeIntervalSince1970: 1_000_000)
+        let goalDraft = CompletedSessionDraft(
+            id: UUID(),
+            skillID: skill.id,
+            startedAt: firstEnd.addingTimeInterval(-60),
+            endedAt: firstEnd,
+            activeSeconds: 60,
+            focusGoal: SessionFocusGoal.xp(amount: 750, startingTotalXP: 0),
+            shouldResumeOnCancel: false
+        )
+        _ = try SessionCommitService.commit(
+            draft: goalDraft,
+            countedSeconds: 60,
+            note: "",
+            source: .timer,
+            skill: skill,
+            in: context,
+            now: firstEnd
+        )
+
+        let laterEnd = firstEnd.addingTimeInterval(86_400)
+        let laterDraft = CompletedSessionDraft(
+            id: UUID(),
+            skillID: skill.id,
+            startedAt: laterEnd.addingTimeInterval(-3_600),
+            endedAt: laterEnd,
+            activeSeconds: 3_600,
+            focusGoal: nil,
+            shouldResumeOnCancel: false
+        )
+        _ = try SessionCommitService.commit(
+            draft: laterDraft,
+            countedSeconds: 3_600,
+            note: "",
+            source: .timer,
+            skill: skill,
+            in: context,
+            now: laterEnd
+        )
+
+        let goalSessionID = goalDraft.id
+        let goalSession = try XCTUnwrap(
+            context.fetch(FetchDescriptor<SkillSession>()).first { $0.id == goalSessionID }
+        )
+        XCTAssertFalse(goalSession.completedFocusGoal)
+
+        _ = try SessionCommitService.update(
+            session: goalSession,
+            endedAt: firstEnd,
+            activeSeconds: 60,
+            note: "Fixed a typo",
+            in: context
+        )
+
+        XCTAssertFalse(
+            goalSession.completedFocusGoal,
+            "XP from later sessions must not complete an earlier session's goal."
+        )
+    }
+
+    @MainActor
     private func makeContainer() throws -> ModelContainer {
         let schema = Schema([
             LifeSkill.self,
@@ -1394,4 +1467,274 @@ final class MotionPolicyTests: XCTestCase {
             SkillingTimeMotion.revealDelayNanoseconds(order: 10)
         )
     }
+}
+
+final class AuditRegressionTests: XCTestCase {
+    func testAchievementStatusesMatchPersistedUnlockIdentifiers() {
+        let skill = LifeSkill(
+            name: "Reading",
+            symbolName: "book",
+            accentHex: "FFFFFF",
+            category: "Learning"
+        )
+        let end = Date(timeIntervalSince1970: 500_000)
+        let session = SkillSession(
+            skillID: skill.id,
+            startedAt: end.addingTimeInterval(-3_600),
+            endedAt: end,
+            activeSeconds: 3_600
+        )
+
+        let resolvedIDs = Set(
+            RewardResolver.resolve(skills: [skill], sessions: [session]).achievements.map(\.id)
+        )
+        let unlockedStatuses = AchievementEngine.statuses(for: skill, sessions: [session])
+            .filter(\.isUnlocked)
+            + AchievementEngine.globalStatuses(skills: [skill], sessions: [session])
+            .filter(\.isUnlocked)
+
+        XCTAssertFalse(unlockedStatuses.isEmpty)
+        for status in unlockedStatuses {
+            XCTAssertTrue(
+                resolvedIDs.contains(status.unlockIdentifier),
+                "No persisted record would match \(status.unlockIdentifier)"
+            )
+        }
+    }
+
+    func testCreatingSkillsWithoutPracticeDoesNotEarnTotalLevel() {
+        let skills = (0..<30).map { index in
+            LifeSkill(
+                name: "Skill \(index)",
+                symbolName: "sparkles",
+                accentHex: "FFFFFF",
+                category: "Test"
+            )
+        }
+
+        let achievementIDs = RewardResolver.resolve(skills: skills, sessions: [])
+            .achievements.map(\.achievementID)
+        let status = AchievementEngine.globalStatuses(skills: skills, sessions: [])
+            .first { $0.definition.id == "global-level-25" }
+
+        XCTAssertFalse(achievementIDs.contains("global-level-25"))
+        XCTAssertEqual(status?.isUnlocked, false)
+    }
+
+    func testTimeZoneChangeDoesNotDuplicateTheCurrentBoard() throws {
+        var chicago = Calendar(identifier: .gregorian)
+        chicago.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Chicago"))
+        var newYork = Calendar(identifier: .gregorian)
+        newYork.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
+        let now = try XCTUnwrap(
+            chicago.date(from: DateComponents(year: 2026, month: 8, day: 10, hour: 9))
+        )
+        let skills = [
+            LifeSkill(name: "Cooking", symbolName: "fork.knife", accentHex: "FFFFFF", category: "Home"),
+            LifeSkill(name: "Reading", symbolName: "book", accentHex: "FFFFFF", category: "Learning"),
+            LifeSkill(name: "Exercise", symbolName: "figure.run", accentHex: "FFFFFF", category: "Wellbeing")
+        ]
+
+        let beforeTravel = QuestEngine.makeAssignments(
+            cadence: .daily,
+            skills: skills,
+            sessions: [],
+            existingAssignments: [],
+            calendar: chicago,
+            now: now
+        )
+        let afterTravel = QuestEngine.makeAssignments(
+            cadence: .daily,
+            skills: skills,
+            sessions: [],
+            existingAssignments: beforeTravel,
+            calendar: newYork,
+            now: now
+        )
+
+        XCTAssertEqual(beforeTravel.count, 3)
+        XCTAssertTrue(afterTravel.isEmpty, "The running board keeps its slots until it ends.")
+    }
+
+    @MainActor
+    func testClosedQuestPeriodOnlyCompletesForTheTimerSessionBeingSaved() {
+        let periodStart = Date(timeIntervalSince1970: 1_000_000)
+        let periodEnd = periodStart.addingTimeInterval(86_400)
+        func makeAssignment() -> QuestAssignment {
+            QuestAssignment(
+                id: "closed-\(UUID().uuidString)",
+                templateID: "daily-put-in-time",
+                cadenceRawValue: QuestCadence.daily.rawValue,
+                kindRawValue: QuestKind.activeTime.rawValue,
+                slot: 0,
+                periodStart: periodStart,
+                periodEnd: periodEnd,
+                timeZoneIdentifier: "UTC",
+                title: "Put in the Time",
+                questDescription: "Skill today.",
+                systemImage: "hourglass",
+                targetValue: 600
+            )
+        }
+        let skillID = UUID()
+
+        let manual = SkillSession(
+            skillID: skillID,
+            startedAt: periodStart.addingTimeInterval(100),
+            endedAt: periodStart.addingTimeInterval(1_000),
+            activeSeconds: 900,
+            source: .manual
+        )
+        let backdated = makeAssignment()
+        let manualCompleted = QuestBoardService.reconcile(
+            assignments: [backdated],
+            skills: [],
+            sessions: [manual],
+            triggeringSessionID: manual.id,
+            now: periodEnd.addingTimeInterval(3_600)
+        )
+        XCTAssertTrue(manualCompleted.isEmpty)
+        XCTAssertNil(backdated.completedAt)
+
+        let timer = SkillSession(
+            skillID: skillID,
+            startedAt: periodEnd.addingTimeInterval(-1_000),
+            endedAt: periodEnd.addingTimeInterval(-100),
+            activeSeconds: 900
+        )
+        let savedAfterMidnight = makeAssignment()
+        let timerCompleted = QuestBoardService.reconcile(
+            assignments: [savedAfterMidnight],
+            skills: [],
+            sessions: [timer],
+            triggeringSessionID: timer.id,
+            now: periodEnd.addingTimeInterval(300)
+        )
+        XCTAssertEqual(timerCompleted.count, 1)
+        XCTAssertEqual(savedAfterMidnight.completedAt, timer.endedAt)
+    }
+
+    func testLiveQuestCountdownsAreAnchoredToTheCurrentMoment() {
+        let skill = LifeSkill(
+            name: "Reading",
+            symbolName: "book",
+            accentHex: "FFFFFF",
+            category: "Learning"
+        )
+        let segmentStart = Date(timeIntervalSince1970: 2_000_000)
+        let now = segmentStart.addingTimeInterval(600)
+        let snapshot = ActiveSessionSnapshot(
+            id: UUID(),
+            skillID: skill.id,
+            startedAt: segmentStart,
+            accumulatedActiveSeconds: 0,
+            activeSegmentStartedAt: segmentStart,
+            finishRequestedAt: nil,
+            shouldResumeAfterCancelledFinish: nil,
+            focusGoal: nil
+        )
+        func assignment(kind: QuestKind, currentValue: Int) -> QuestAssignment {
+            QuestAssignment(
+                id: "live-\(kind.rawValue)",
+                templateID: "live",
+                cadenceRawValue: QuestCadence.daily.rawValue,
+                kindRawValue: kind.rawValue,
+                slot: 0,
+                periodStart: segmentStart.addingTimeInterval(-3_600),
+                periodEnd: segmentStart.addingTimeInterval(80_000),
+                timeZoneIdentifier: "UTC",
+                title: "Quest",
+                questDescription: "",
+                systemImage: "timer",
+                targetValue: 1_800,
+                currentValue: currentValue
+            )
+        }
+
+        let activeTime = QuestEngine.liveStatus(
+            assignment: assignment(kind: .activeTime, currentValue: 0),
+            snapshot: snapshot,
+            skill: skill,
+            baseTotalSeconds: 0,
+            at: now
+        )
+        XCTAssertEqual(activeTime?.timerStart, segmentStart)
+        XCTAssertEqual(activeTime?.timerEnd, segmentStart.addingTimeInterval(1_800))
+
+        let deep = QuestEngine.liveStatus(
+            assignment: assignment(kind: .deepSession, currentValue: 1_200),
+            snapshot: snapshot,
+            skill: skill,
+            baseTotalSeconds: 0,
+            at: now
+        )
+        XCTAssertEqual(
+            deep?.timerStart,
+            segmentStart,
+            "An earlier 20-minute session must not shorten this session's countdown."
+        )
+        XCTAssertEqual(deep?.timerEnd, segmentStart.addingTimeInterval(1_800))
+    }
+
+    func testUnknownCurveFallsBackInsteadOfCrashing() {
+        XCTAssertFalse(ProgressionEngine.isSupported(curveVersion: 999))
+        XCTAssertEqual(
+            ProgressionEngine.level(forTotalXP: 1_000, curveVersion: 999),
+            ProgressionEngine.level(forTotalXP: 1_000, curveVersion: 1)
+        )
+    }
+
+    @MainActor
+    func testUnreadableTimerIsKeptAsideInsteadOfDeleted() throws {
+        let suiteName = "SessionControllerTests.unreadable"
+        let defaults = try XCTUnwrap(UserDefaults(suiteName: suiteName))
+        defaults.removePersistentDomain(forName: suiteName)
+        defer { defaults.removePersistentDomain(forName: suiteName) }
+
+        let garbage = Data("not a timer".utf8)
+        defaults.set(garbage, forKey: SkillingTimeSharedConfiguration.activeSessionKey)
+        let controller = SessionController(defaults: defaults)
+
+        XCTAssertNil(controller.activeSession)
+        XCTAssertNotNil(controller.storageErrorMessage)
+        XCTAssertEqual(
+            defaults.data(forKey: SkillingTimeSharedConfiguration.unreadableActiveSessionKey),
+            garbage
+        )
+        XCTAssertNil(defaults.data(forKey: SkillingTimeSharedConfiguration.activeSessionKey))
+    }
+}
+
+final class SchemaSnapshotTests: XCTestCase {
+    /// If this fails, a live @Model changed. Freeze the V5 declarations into nested
+    /// classes in SchemaVersioning.swift, add SkillingTimeSchemaV6 and a migration
+    /// stage, then update this snapshot to the new shape.
+    func testLiveModelsStillMatchShippedSchemaV5() {
+        let schema = Schema(versionedSchema: SkillingTimeSchemaV5.self)
+        var actual: [String: [String]] = [:]
+        for entity in schema.entities {
+            actual[entity.name] = (
+                Array(entity.attributesByName.keys) + Array(entity.relationshipsByName.keys)
+            ).sorted()
+        }
+        XCTAssertEqual(actual, Self.shippedV5)
+    }
+
+    private static let shippedV5: [String: [String]] = [
+        "AchievementUnlock": ["achievementID", "id", "skillID", "triggeringSessionID", "unlockedAt"],
+        "ActivityDayLedger": ["dayStart", "distinctSkillCount", "id", "longestSessionSeconds", "rebuiltAt", "sessionCount", "timeZoneIdentifier", "totalActiveSeconds", "xpEarned"],
+        "CharacterPathLedger": ["curveVersion", "latestSessionAt", "pathRawValue", "rebuiltAt", "sessionCount", "totalActiveSeconds"],
+        "CharacterProfile": ["accentHex", "createdAt", "crestSymbolName", "displayName", "equippedTitleID", "id", "pathReviewCompletedAt", "progressionCurveVersion"],
+        "CharacterTitleUnlock": ["id", "pathRawValue", "skillID", "sourceRawValue", "systemImage", "title", "titleDescription", "triggeringSessionID", "unlockedAt"],
+        "ChronicleUnlock": ["id", "milestoneLevel", "skillID", "triggeringSessionID", "unlockedAt"],
+        "ExpertChallenge": ["challengeDescription", "completedAt", "currentValue", "endsAt", "id", "kindRawValue", "retiredAt", "skillID", "startedAt", "systemImage", "targetValue", "title", "triggeringSessionID"],
+        "LifeSkill": ["accentHex", "category", "createdAt", "id", "isArchived", "name", "progressionCurveVersion", "sortOrder", "symbolName"],
+        "PersonalRecordEvent": ["achievedAt", "id", "kindRawValue", "previousValue", "recordDescription", "skillID", "title", "triggeringSessionID", "value"],
+        "QuestAssignment": ["baselineValue", "cadenceRawValue", "completedAt", "currentValue", "generatedAt", "generationVersion", "id", "kindRawValue", "periodEnd", "periodStart", "questDescription", "retiredAt", "slot", "systemImage", "targetPathRawValue", "targetSkillID", "targetSkillName", "targetValue", "templateID", "timeZoneIdentifier", "title", "triggeringSessionID"],
+        "SkillLedger": ["activeDayCount", "firstSessionAt", "latestSessionAt", "longestSessionSeconds", "rebuiltAt", "sessionCount", "skillID", "totalActiveSeconds"],
+        "SkillLegacy": ["chosenAt", "crestSymbolName", "masterTitle", "skillID"],
+        "SkillPathAssignment": ["createdAt", "effectiveFrom", "id", "isConfirmed", "pathRawValue", "skillID"],
+        "SkillSession": ["activeSeconds", "endedAt", "focusGoalCompletedRawValue", "focusGoalKindRawValue", "focusGoalStartingTotalXP", "focusGoalTargetValue", "id", "note", "skillID", "sourceRawValue", "startedAt"],
+        "SkillSpecialization": ["chosenAt", "skillID", "title"]
+    ]
 }

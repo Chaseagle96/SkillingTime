@@ -54,7 +54,7 @@ enum PersonalRecordEngine {
                     kind: .longestSkillSession,
                     skillID: triggeringSession.skillID,
                     title: "Longest \(skill?.name ?? "Skill") Session",
-                    description: "\(DurationText.compact(triggeringSession.activeSeconds)) · previous best \(DurationText.compact(previousSkillLongest))",
+                    description: "\(DurationText.precise(triggeringSession.activeSeconds)) · previous best \(DurationText.precise(previousSkillLongest))",
                     value: triggeringSession.activeSeconds,
                     previousValue: previousSkillLongest,
                     session: triggeringSession
@@ -83,7 +83,7 @@ enum PersonalRecordEngine {
                         kind: .mostTimeInDay,
                         skillID: nil,
                         title: "Most Skilling Time in One Day",
-                        description: "\(DurationText.compact(afterDay.totalActiveSeconds)) · previous best \(DurationText.compact(previousTimeBest))",
+                        description: "\(DurationText.precise(afterDay.totalActiveSeconds)) · previous best \(DurationText.precise(previousTimeBest))",
                         value: afterDay.totalActiveSeconds,
                         previousValue: previousTimeBest,
                         session: triggeringSession
@@ -122,7 +122,7 @@ enum PersonalRecordEngine {
                         kind: .bestWeek,
                         skillID: nil,
                         title: "Best Week",
-                        description: "\(DurationText.compact(afterWeek)) · previous best \(DurationText.compact(previousWeekBest))",
+                        description: "\(DurationText.precise(afterWeek)) · previous best \(DurationText.precise(previousWeekBest))",
                         value: afterWeek,
                         previousValue: previousWeekBest,
                         session: triggeringSession

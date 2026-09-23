@@ -206,3 +206,69 @@ extension View {
         )
     }
 }
+
+/// Spoken names for the glyph, crest, and accent pickers. VoiceOver would
+/// otherwise read raw SF Symbol names or the same label for every color.
+enum SymbolNames {
+    private static let names: [String: String] = [
+        "sparkles": "Sparkles",
+        "frying.pan.fill": "Frying pan",
+        "book.closed.fill": "Book",
+        "music.note": "Music note",
+        "pianokeys": "Piano keys",
+        "paintpalette.fill": "Paint palette",
+        "hammer.fill": "Hammer",
+        "wrench.and.screwdriver.fill": "Tools",
+        "leaf.fill": "Leaf",
+        "figure.run": "Runner",
+        "figure.strengthtraining.traditional": "Weightlifter",
+        "brain.head.profile": "Brain",
+        "globe.americas.fill": "Globe",
+        "character.book.closed.fill": "Language book",
+        "laptopcomputer": "Laptop",
+        "camera.fill": "Camera",
+        "pawprint.fill": "Paw print",
+        "heart.fill": "Heart",
+        "cross.fill": "Cross",
+        "hands.sparkles.fill": "Clean hands",
+        "house.fill": "House",
+        "car.fill": "Car",
+        "tray.full.fill": "Tray",
+        "shippingbox.fill": "Box",
+        "dumbbell.fill": "Dumbbell",
+        "bicycle": "Bicycle",
+        "crown.fill": "Crown",
+        "seal.fill": "Seal",
+        "shield.fill": "Shield",
+        "star.circle.fill": "Star",
+        "laurel.leading": "Laurel",
+        "flame.fill": "Flame",
+        "diamond.fill": "Diamond",
+        "person.fill": "Person"
+    ]
+
+    private static let colorNames: [String: String] = [
+        "D97A43": "Orange",
+        "C85E5E": "Red",
+        "C96E91": "Pink",
+        "A96AA2": "Purple",
+        "8A72B5": "Violet",
+        "5D83C4": "Blue",
+        "55A7A2": "Teal",
+        "6D9E58": "Green",
+        "D2A84A": "Gold",
+        "B38255": "Brown"
+    ]
+
+    static func label(for symbol: String) -> String {
+        if let name = names[symbol] { return name }
+        return symbol
+            .replacingOccurrences(of: ".fill", with: "")
+            .replacingOccurrences(of: ".", with: " ")
+            .capitalized
+    }
+
+    static func colorLabel(for hex: String) -> String {
+        "\(colorNames[hex.uppercased()] ?? "Custom") accent"
+    }
+}

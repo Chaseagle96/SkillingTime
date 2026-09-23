@@ -37,8 +37,12 @@ final class LiveActivityCoordinator: ObservableObject {
             await activity.end(nil, dismissalPolicy: .immediate)
         }
 
+        // iOS ends long-running Live Activities on its own. An ended activity can no
+        // longer be updated, so only a still-live one counts as existing; otherwise
+        // a long session would silently lose its Live Activity.
         if let existing = activities.first(where: {
             $0.attributes.sessionID == snapshot.id
+                && ($0.activityState == .active || $0.activityState == .stale)
         }) {
             let attributes = existing.attributes
             let staticIdentityMatches = attributes.skillID == skill.id

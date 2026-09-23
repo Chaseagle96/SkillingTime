@@ -279,6 +279,16 @@ struct SkillbookView: View {
         }
         Haptics.selection()
         saveSkillChanges()
+        refreshQuestboard()
+    }
+
+    /// Retiring a Skill retires its unfinished quests and refills those slots.
+    private func refreshQuestboard() {
+        do {
+            _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
+        } catch {
+            persistenceError = "The Skill was retired, but the Questboard could not refresh yet. \(error.localizedDescription)"
+        }
     }
 
     private func saveSkillChanges() {
@@ -485,9 +495,7 @@ private struct SkillIdentitySections: View {
                             }
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel(
-                        symbol.replacingOccurrences(of: ".fill", with: "")
-                    )
+                    .accessibilityLabel(SymbolNames.label(for: symbol))
                     .accessibilityAddTraits(
                         selectedSymbol == symbol ? .isSelected : []
                     )
@@ -514,7 +522,7 @@ private struct SkillIdentitySections: View {
                         .frame(width: 28, height: 28)
                     }
                     .buttonStyle(.plain)
-                    .accessibilityLabel("Accent color")
+                    .accessibilityLabel(SymbolNames.colorLabel(for: color))
                     .accessibilityAddTraits(
                         selectedColor == color ? .isSelected : []
                     )
@@ -712,11 +720,20 @@ struct EditSkillView: View {
 
         do {
             try modelContext.save()
-            try CharacterProgressionService.prepare(in: modelContext)
-            dismiss()
         } catch {
             modelContext.rollback()
             saveError = error.localizedDescription
+            return
+        }
+
+        // The Skill itself is saved at this point. A failure below only means the
+        // derived Character and Quest data will refresh on the next launch.
+        do {
+            try CharacterProgressionService.prepare(in: modelContext)
+            _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
+            dismiss()
+        } catch {
+            saveError = "Your changes were saved, but Character and Quest progress could not refresh yet. \(error.localizedDescription)"
         }
     }
 }

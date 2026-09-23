@@ -42,6 +42,11 @@ struct AchievementStatus: Identifiable, Sendable {
         return definition.id
     }
 
+    /// The identifier of the persisted `AchievementUnlock` for this status.
+    var unlockIdentifier: String {
+        AchievementUnlock.identifier(achievementID: definition.id, skillID: skillID)
+    }
+
     var isUnlocked: Bool { currentValue >= targetValue }
     var fractionComplete: Double {
         guard targetValue > 0 else { return 1 }
@@ -183,7 +188,7 @@ enum AchievementEngine {
             AchievementDefinition(
                 id: "global-level-\(level)",
                 title: title,
-                description: "Reach Total Level \(level).",
+                description: "Reach Total Level \(level) across Skills you have practiced.",
                 systemImage: "books.vertical.fill",
                 scope: .global,
                 criterion: .totalLevel(level)
@@ -298,7 +303,10 @@ enum AchievementEngine {
     }
 
     static func globalStatuses(skills: [LifeSkill], sessions: [SkillSession]) -> [AchievementStatus] {
-        let totalLevel = SessionAnalytics.totalLevel(skills: skills, sessions: sessions)
+        let totalLevel = SessionAnalytics.practicedTotalLevel(
+            skills: skills,
+            index: SessionAnalytics.index(sessions: sessions)
+        )
         let totalSeconds = sessions.reduce(0) { $0 + max(0, $1.activeSeconds) }
         let activeSkillIDs = Set(sessions.filter { $0.activeSeconds > 0 }.map(\.skillID))
 
@@ -374,29 +382,5 @@ enum AchievementEngine {
 
     static func definition(id: String) -> AchievementDefinition? {
         (skillDefinitions + globalDefinitions).first { $0.id == id }
-    }
-}
-
-enum DurationText {
-    static func timer(_ seconds: Int) -> String {
-        let safe = max(0, seconds)
-        let hours = safe / 3600
-        let minutes = (safe % 3600) / 60
-        let remainder = safe % 60
-        return String(format: "%02d:%02d:%02d", hours, minutes, remainder)
-    }
-
-    static func compact(_ seconds: Int) -> String {
-        let safe = max(0, seconds)
-        let hours = safe / 3600
-        let minutes = (safe % 3600) / 60
-
-        if hours > 0 {
-            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
-        }
-        if minutes > 0 {
-            return "\(minutes)m"
-        }
-        return "\(safe)s"
     }
 }

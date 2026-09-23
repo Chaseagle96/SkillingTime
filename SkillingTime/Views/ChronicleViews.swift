@@ -313,7 +313,11 @@ private struct AchievementGalleryView: View {
     }
 
     var body: some View {
-        ScrollView {
+        // Computed once per render; both replay the selected scope's history.
+        let statuses = self.statuses
+        let scopedUnlocks = self.scopedUnlocks
+
+        return ScrollView {
             VStack(spacing: 14) {
                 HStack {
                     VStack(alignment: .leading, spacing: 3) {
@@ -351,7 +355,9 @@ private struct AchievementGalleryView: View {
                 ) { index, status in
                     AchievementRow(
                         status: status,
-                        unlock: scopedUnlocks[status.id]
+                        // Records are keyed by AchievementUnlock.identifier, which
+                        // differs from the status's list identity.
+                        unlock: scopedUnlocks[status.unlockIdentifier]
                     )
                     .skillingTimeReveal(order: index + 1)
                 }

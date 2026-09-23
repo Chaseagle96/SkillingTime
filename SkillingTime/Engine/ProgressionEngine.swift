@@ -65,23 +65,22 @@ private enum ProgressionCurveRegistry {
     private static let versionOne = ProgressionCurveV1()
     private static let versionOneThresholds = makeThresholds(for: versionOne)
 
-    static func curve(for rawVersion: Int) -> any ProgressionCurve {
-        guard let version = ProgressionCurveVersion(rawValue: rawVersion) else {
-            preconditionFailure("Unsupported progression curve version: \(rawVersion)")
-        }
+    /// Unknown versions fall back to v1 for display instead of crashing views,
+    /// the widget, or the Live Activity intent. Writes still reject them through
+    /// `ProgressionEngine.isSupported(curveVersion:)` before any progression work.
+    private static func resolvedVersion(_ rawVersion: Int) -> ProgressionCurveVersion {
+        ProgressionCurveVersion(rawValue: rawVersion) ?? .v1
+    }
 
-        switch version {
+    static func curve(for rawVersion: Int) -> any ProgressionCurve {
+        switch resolvedVersion(rawVersion) {
         case .v1:
             return versionOne
         }
     }
 
     static func cumulativeThresholds(for rawVersion: Int) -> [Int] {
-        guard let version = ProgressionCurveVersion(rawValue: rawVersion) else {
-            preconditionFailure("Unsupported progression curve version: \(rawVersion)")
-        }
-
-        switch version {
+        switch resolvedVersion(rawVersion) {
         case .v1:
             return versionOneThresholds
         }

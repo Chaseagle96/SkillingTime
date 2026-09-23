@@ -1,6 +1,23 @@
 import SwiftData
 import SwiftUI
 
+/// Single owner of the full-screen active session. Views ask it to present
+/// instead of attaching their own covers, so a deep link, a notification tap, and
+/// a Skill screen can never stack two timer screens.
+@MainActor
+final class ActiveSessionPresenter: ObservableObject {
+    struct Presentation: Identifiable, Equatable {
+        let id: UUID
+    }
+
+    @Published var presentation: Presentation?
+
+    func present(skillID: UUID) {
+        guard presentation?.id != skillID else { return }
+        presentation = Presentation(id: skillID)
+    }
+}
+
 struct RootTabView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.scenePhase) private var scenePhase
@@ -13,10 +30,10 @@ struct RootTabView: View {
     @Query(sort: \QuestAssignment.periodStart, order: .reverse)
     private var questAssignments: [QuestAssignment]
 
+    @StateObject private var presenter = ActiveSessionPresenter()
     @State private var selectedTab = 0
-    @State private var showingActiveSession = false
-    @State private var presentedSkillID: UUID?
     @State private var persistenceError: String?
+    @State private var ambientSyncTask: Task<Void, Never>?
 
     private var activeSkill: LifeSkill? {
         guard let skillID = sessionController.activeSession?.skillID else { return nil }
@@ -63,15 +80,8 @@ struct RootTabView: View {
             ),
             value: sessionController.activeSession != nil
         )
-        .fullScreenCover(isPresented: $showingActiveSession) {
-            if let presentedSkillID {
-                ActiveSessionView(skillID: presentedSkillID)
-            }
-        }
-        .onChange(of: showingActiveSession) { _, isPresented in
-            if !isPresented {
-                presentedSkillID = nil
-            }
+        .fullScreenCover(item: $presenter.presentation) { presentation in
+            ActiveSessionView(skillID: presentation.id)
         }
         .onChange(of: selectedTab) { _, _ in
             Haptics.selection()
@@ -116,7 +126,9 @@ struct RootTabView: View {
             if let storageError = sessionController.storageErrorMessage {
                 persistenceError = storageError
             }
-            await synchronizeAmbientSession()
+            clearRecoveredCommittedTimer()
+            handleOpenedNotification(notificationManager.openedSessionID)
+            synchronizeAmbientSessionSoon()
         }
         .onChange(of: sessionController.activeSession) { _, _ in
             synchronizeAmbientSessionSoon()
@@ -133,9 +145,16 @@ struct RootTabView: View {
         .onChange(of: notificationManager.alertsEnabled) { _, _ in
             synchronizeAmbientSessionSoon()
         }
+        .onChange(of: sessionController.ambientSyncRequest) { _, _ in
+            synchronizeAmbientSessionSoon()
+        }
+        .onChange(of: notificationManager.openedSessionID) { _, sessionID in
+            handleOpenedNotification(sessionID)
+        }
         .onChange(of: scenePhase) { _, phase in
             guard phase == .active else { return }
             sessionController.refreshFromSharedStorage()
+            clearRecoveredCommittedTimer()
             do {
                 _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
             } catch {
@@ -164,6 +183,7 @@ struct RootTabView: View {
         } message: {
             Text(persistenceError ?? "The requested change could not be completed.")
         }
+        .environmentObject(presenter)
         .preferredColorScheme(.dark)
     }
 
@@ -298,8 +318,32 @@ struct RootTabView: View {
     }
 
     private func openActiveSession(skillID: UUID) {
-        presentedSkillID = skillID
-        showingActiveSession = true
+        presenter.present(skillID: skillID)
+    }
+
+    /// If the app stopped after SwiftData saved a session but before the timer was
+    /// cleared, the timer comes back "awaiting commit". Its UUID is already in
+    /// history, so clear it here rather than letting Cancel resume a saved session.
+    private func clearRecoveredCommittedTimer() {
+        guard let snapshot = sessionController.activeSession,
+              snapshot.isAwaitingCommit else { return }
+        let sessionID = snapshot.id
+        let descriptor = FetchDescriptor<SkillSession>(
+            predicate: #Predicate<SkillSession> { session in
+                session.id == sessionID
+            }
+        )
+        if let count = try? modelContext.fetchCount(descriptor), count > 0 {
+            sessionController.markCommitted(sessionID: sessionID)
+        }
+    }
+
+    private func handleOpenedNotification(_ sessionID: UUID?) {
+        guard let sessionID else { return }
+        notificationManager.consumeOpenedSession()
+        guard let snapshot = sessionController.activeSession,
+              snapshot.id == sessionID else { return }
+        openActiveSession(skillID: snapshot.skillID)
     }
 
     private func handleDeepLink(_ url: URL) {
@@ -318,8 +362,13 @@ struct RootTabView: View {
         openActiveSession(skillID: snapshot.skillID)
     }
 
+    /// Syncs run one at a time in request order. Each run reads the latest state,
+    /// so the last request always wins and an older, slower run can never overwrite
+    /// a newer Live Activity or alert.
     private func synchronizeAmbientSessionSoon() {
-        Task {
+        let previous = ambientSyncTask
+        ambientSyncTask = Task {
+            await previous?.value
             await synchronizeAmbientSession()
         }
     }

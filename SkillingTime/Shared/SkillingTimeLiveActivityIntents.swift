@@ -4,12 +4,14 @@ import Foundation
 import UserNotifications
 
 struct ToggleSkillingTimeSessionIntent: LiveActivityIntent {
-    static var title: LocalizedStringResource = "Pause or Resume Skilling Time Session"
-    static var description = IntentDescription(
+    static let title: LocalizedStringResource = "Pause or Resume Skilling Time Session"
+    static let description = IntentDescription(
         "Toggles the active Skilling Time timer without opening the app."
     )
     static var openAppWhenRun: Bool { false }
     static var authenticationPolicy: IntentAuthenticationPolicy { .alwaysAllowed }
+    /// Only meaningful from the Live Activity's own button; keep it out of Shortcuts.
+    static var isDiscoverable: Bool { false }
 
     @Parameter(title: "Session ID")
     var sessionID: String
@@ -32,10 +34,14 @@ struct ToggleSkillingTimeSessionIntent: LiveActivityIntent {
         else { return .result() }
 
         guard let activity = Activity<SkillingTimeActivityAttributes>.activities.first(
-            where: { $0.attributes.sessionID == id }
+            where: {
+                $0.attributes.sessionID == id
+                    && ($0.activityState == .active || $0.activityState == .stale)
+            }
         ) else { return .result() }
 
         var state = activity.content.state
+        let wasPaused = state.isPaused
         state.accumulatedActiveSeconds = payload.accumulatedActiveSeconds
         state.activeSegmentStartedAt = payload.activeSegmentStartedAt
         state.isPaused = payload.isPaused
@@ -46,6 +52,7 @@ struct ToggleSkillingTimeSessionIntent: LiveActivityIntent {
             attributes: activity.attributes,
             at: actionDate
         )
+        refreshQuestTimer(&state, wasPaused: wasPaused, at: actionDate)
         await activity.update(ActivityContent(state: state, staleDate: nil))
         await synchronizeProgressionNotification(
             payload: payload,
@@ -81,54 +88,52 @@ struct ToggleSkillingTimeSessionIntent: LiveActivityIntent {
         state.xpRemaining = progress.xpRemaining
         state.progressFraction = progress.fractionComplete
 
-        guard let goal = payload.focusGoal else {
+        guard let goal = payload.focusGoal?.goal else {
             state.focusGoalTitle = nil
             state.focusGoalProgressLabel = nil
             state.focusGoalFraction = nil
             return
         }
 
-        let current: Int
-        let target: Int
-        let title: String
-        let label: String
-
-        switch goal.kind {
-        case "duration":
-            current = max(0, sessionSeconds)
-            target = max(1, goal.targetValue)
-            title = "Practice for \(compactDuration(target))"
-            label = "\(compactDuration(min(current, target))) of \(compactDuration(target))"
-        case "xp":
-            current = max(0, liveXP - goal.startingTotalXP)
-            target = max(1, goal.targetValue)
-            title = "Earn \(target.formatted()) XP"
-            label = "\(min(current, target).formatted()) of \(target.formatted()) XP"
-        case "progression":
-            current = max(0, liveXP - goal.startingTotalXP)
-            target = max(1, goal.targetValue - goal.startingTotalXP)
-            title = "Reach the next progression threshold"
-            label = "\(min(current, target).formatted()) of \(target.formatted()) XP"
-        default:
-            state.focusGoalTitle = nil
-            state.focusGoalProgressLabel = nil
-            state.focusGoalFraction = nil
-            return
-        }
-
-        state.focusGoalTitle = title
-        state.focusGoalProgressLabel = label
-        state.focusGoalFraction = min(max(Double(current) / Double(target), 0), 1)
+        let evaluated = FocusGoalProgress.evaluate(
+            goal: goal,
+            sessionSeconds: sessionSeconds,
+            liveTotalXP: liveXP
+        )
+        state.focusGoalTitle = evaluated.title
+        state.focusGoalProgressLabel = evaluated.progressLabel
+        state.focusGoalFraction = evaluated.fractionComplete
     }
 
-    private func compactDuration(_ seconds: Int) -> String {
-        let safe = max(0, seconds)
-        let hours = safe / 3_600
-        let minutes = (safe % 3_600) / 60
-        let remainder = safe % 60
-        if hours > 0 { return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h" }
-        if minutes > 0 { return remainder > 0 ? "\(minutes)m \(remainder)s" : "\(minutes)m" }
-        return "\(remainder)s"
+    /// Time-based quest countdowns are an interval that only runs while the timer
+    /// runs. Pausing freezes the reached fraction; resuming re-anchors the interval
+    /// at the resume instant so paused time is not counted.
+    private func refreshQuestTimer(
+        _ state: inout SkillingTimeActivityAttributes.ContentState,
+        wasPaused: Bool,
+        at date: Date
+    ) {
+        guard let start = state.questTimerStart,
+              let end = state.questTimerEnd,
+              start < end,
+              state.questIsComplete != true else { return }
+        let duration = end.timeIntervalSince(start)
+
+        if state.isPaused, !wasPaused {
+            let reached = min(max(date.timeIntervalSince(start), 0), duration)
+            state.questFraction = reached / duration
+            state.questProgressLabel = questLabel(reached: reached, duration: duration)
+        } else if !state.isPaused, wasPaused {
+            let reached = min(max((state.questFraction ?? 0) * duration, 0), duration)
+            let newStart = date.addingTimeInterval(-reached)
+            state.questTimerStart = newStart
+            state.questTimerEnd = newStart.addingTimeInterval(duration)
+            state.questProgressLabel = questLabel(reached: reached, duration: duration)
+        }
+    }
+
+    private func questLabel(reached: TimeInterval, duration: TimeInterval) -> String {
+        "\(DurationText.compact(Int(reached))) of \(DurationText.compact(Int(duration.rounded())))"
     }
 
     private func synchronizeProgressionNotification(

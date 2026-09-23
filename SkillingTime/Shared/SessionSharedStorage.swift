@@ -6,11 +6,133 @@ enum SkillingTimeSharedConfiguration {
     static let appGroupIdentifier = "group.com.projectskillbook.app"
     static let activeSessionKey = "skillbook.active-session.v2"
     static let legacyActiveSessionKey = "skillbook.active-session.v1"
+    static let unreadableActiveSessionKey = "skillbook.active-session.unreadable"
     static let notificationPreferenceKey = "skillbook.progression-alerts.enabled"
     static let progressionNotificationIdentifier = "skillbook.progression.next-threshold"
 
+    /// `UserDefaults(suiteName:)` returns a store even when the App Group is not
+    /// entitled (for example after a re-signing tool renames the group). That store
+    /// is not shared, so check the group container before relying on it.
     static func makeSharedDefaults() -> UserDefaults {
-        UserDefaults(suiteName: appGroupIdentifier) ?? .standard
+        guard FileManager.default.containerURL(
+            forSecurityApplicationGroupIdentifier: appGroupIdentifier
+        ) != nil,
+            let shared = UserDefaults(suiteName: appGroupIdentifier)
+        else {
+            return .standard
+        }
+        return shared
+    }
+}
+
+enum DurationText {
+    static func timer(_ seconds: Int) -> String {
+        let safe = max(0, seconds)
+        let hours = safe / 3600
+        let minutes = (safe % 3600) / 60
+        let remainder = safe % 60
+        return String(format: "%02d:%02d:%02d", hours, minutes, remainder)
+    }
+
+    static func compact(_ seconds: Int) -> String {
+        let safe = max(0, seconds)
+        let hours = safe / 3600
+        let minutes = (safe % 3600) / 60
+
+        if hours > 0 {
+            return minutes > 0 ? "\(hours)h \(minutes)m" : "\(hours)h"
+        }
+        if minutes > 0 {
+            return "\(minutes)m"
+        }
+        return "\(safe)s"
+    }
+
+    /// Like `compact`, but keeps seconds under an hour so two close values (for
+    /// example 61s and 119s) don't both read as "1m".
+    static func precise(_ seconds: Int) -> String {
+        let safe = max(0, seconds)
+        guard safe < 3600 else { return compact(safe) }
+        let minutes = safe / 60
+        let remainder = safe % 60
+        if minutes == 0 { return "\(remainder)s" }
+        return remainder > 0 ? "\(minutes)m \(remainder)s" : "\(minutes)m"
+    }
+}
+
+enum SessionFocusGoalKind: String, Codable, CaseIterable, Sendable {
+    case duration
+    case xp
+    case progression
+}
+
+struct SessionFocusGoal: Codable, Equatable, Sendable {
+    let kind: SessionFocusGoalKind
+    let targetValue: Int
+    let startingTotalXP: Int
+
+    static func duration(seconds: Int, startingTotalXP: Int) -> SessionFocusGoal {
+        SessionFocusGoal(kind: .duration, targetValue: max(1, seconds), startingTotalXP: startingTotalXP)
+    }
+
+    static func xp(amount: Int, startingTotalXP: Int) -> SessionFocusGoal {
+        SessionFocusGoal(kind: .xp, targetValue: max(1, amount), startingTotalXP: startingTotalXP)
+    }
+
+    static func progression(targetTotalXP: Int, startingTotalXP: Int) -> SessionFocusGoal {
+        SessionFocusGoal(
+            kind: .progression,
+            targetValue: max(startingTotalXP + 1, targetTotalXP),
+            startingTotalXP: startingTotalXP
+        )
+    }
+}
+
+struct FocusGoalProgress: Equatable, Sendable {
+    let title: String
+    let currentValue: Int
+    let targetValue: Int
+    let progressLabel: String
+    let fractionComplete: Double
+    let isComplete: Bool
+
+    static func evaluate(
+        goal: SessionFocusGoal,
+        sessionSeconds: Int,
+        liveTotalXP: Int
+    ) -> FocusGoalProgress {
+        let current: Int
+        let target: Int
+        let title: String
+        let label: String
+
+        switch goal.kind {
+        case .duration:
+            current = max(0, sessionSeconds)
+            target = goal.targetValue
+            title = "Practice for \(DurationText.compact(target))"
+            label = "\(DurationText.compact(min(current, target))) of \(DurationText.compact(target))"
+        case .xp:
+            current = max(0, liveTotalXP - goal.startingTotalXP)
+            target = goal.targetValue
+            title = "Earn \(target.formatted()) XP"
+            label = "\(min(current, target).formatted()) of \(target.formatted()) XP"
+        case .progression:
+            current = max(0, liveTotalXP - goal.startingTotalXP)
+            target = max(1, goal.targetValue - goal.startingTotalXP)
+            title = "Reach the next progression threshold"
+            label = "\(min(current, target).formatted()) of \(target.formatted()) XP"
+        }
+
+        let fraction = min(max(Double(current) / Double(max(1, target)), 0), 1)
+        return FocusGoalProgress(
+            title: title,
+            currentValue: current,
+            targetValue: target,
+            progressLabel: label,
+            fractionComplete: fraction,
+            isComplete: current >= target
+        )
     }
 }
 
@@ -19,6 +141,15 @@ struct SharedSessionFocusGoalPayload: Codable, Equatable, Sendable {
     let kind: String
     let targetValue: Int
     let startingTotalXP: Int
+
+    var goal: SessionFocusGoal? {
+        guard let kind = SessionFocusGoalKind(rawValue: kind) else { return nil }
+        return SessionFocusGoal(
+            kind: kind,
+            targetValue: targetValue,
+            startingTotalXP: startingTotalXP
+        )
+    }
 }
 
 /// Its coding keys intentionally match `ActiveSessionSnapshot` exactly.

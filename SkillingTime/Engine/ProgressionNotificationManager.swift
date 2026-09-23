@@ -55,10 +55,13 @@ enum ProgressionNotificationPlanner {
 }
 
 @MainActor
-final class ProgressionNotificationManager: ObservableObject {
+final class ProgressionNotificationManager: NSObject, ObservableObject {
     @Published private(set) var authorizationStatus: UNAuthorizationStatus = .notDetermined
     @Published private(set) var alertsEnabled: Bool
     @Published private(set) var lastErrorMessage: String?
+    /// Session the person opened by tapping a progression alert. RootTabView
+    /// presents it and then calls `consumeOpenedSession()`.
+    @Published private(set) var openedSessionID: UUID?
 
     private let center: UNUserNotificationCenter
     private let defaults: UserDefaults
@@ -72,6 +75,16 @@ final class ProgressionNotificationManager: ObservableObject {
         alertsEnabled = defaults.bool(
             forKey: SkillingTimeSharedConfiguration.notificationPreferenceKey
         )
+        super.init()
+        center.delegate = self
+    }
+
+    func consumeOpenedSession() {
+        openedSessionID = nil
+    }
+
+    fileprivate func recordOpenedSession(_ sessionID: UUID?) {
+        openedSessionID = sessionID
     }
 
     var canSchedule: Bool {
@@ -176,5 +189,18 @@ final class ProgressionNotificationManager: ObservableObject {
         center.removePendingNotificationRequests(
             withIdentifiers: [ProgressionNotificationPlanner.notificationIdentifier]
         )
+    }
+}
+
+extension ProgressionNotificationManager: UNUserNotificationCenterDelegate {
+    nonisolated func userNotificationCenter(
+        _ center: UNUserNotificationCenter,
+        didReceive response: UNNotificationResponse
+    ) async {
+        let rawSessionID = response.notification.request.content.userInfo["sessionID"] as? String
+        let sessionID = rawSessionID.flatMap(UUID.init(uuidString:))
+        await MainActor.run {
+            self.recordOpenedSession(sessionID)
+        }
     }
 }

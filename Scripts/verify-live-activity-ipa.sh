@@ -1,8 +1,13 @@
 #!/bin/bash
 set -euo pipefail
-IPA="${1:-SkillingTime-v0.3.1-LiveActivity.ipa}"
-if [[ ! -f "$IPA" ]]; then
-  echo "IPA not found: $IPA" >&2
+# Pass the IPA path, or run from a folder containing SkillingTime-*.ipa to use
+# the newest one.
+IPA="${1:-}"
+if [[ -z "$IPA" ]]; then
+  IPA=$(ls -t SkillingTime-*.ipa 2>/dev/null | head -n 1 || true)
+fi
+if [[ -z "$IPA" || ! -f "$IPA" ]]; then
+  echo "IPA not found: ${IPA:-<none>}. Pass the IPA path as the first argument." >&2
   exit 1
 fi
 unzip -t "$IPA" >/dev/null
