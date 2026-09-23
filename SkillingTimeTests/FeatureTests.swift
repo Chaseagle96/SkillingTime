@@ -218,3 +218,16 @@ final class PracticeInsightsTests: XCTestCase {
         )
     }
 }
+
+final class SkillbookLayoutTests: XCTestCase {
+    func testColumnPreferenceIsClampedAndLargeTextUsesTwo() {
+        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 3, isAccessibilitySize: false), 3)
+        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 4, isAccessibilitySize: false), 4)
+        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 9, isAccessibilitySize: false), 4)
+        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 0, isAccessibilitySize: false), 2)
+        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 4, isAccessibilitySize: true), 2)
+        XCTAssertEqual(SkillCardDensity(columnCount: 2), .regular)
+        XCTAssertEqual(SkillCardDensity(columnCount: 3), .compact)
+        XCTAssertEqual(SkillCardDensity(columnCount: 4), .dense)
+    }
+}

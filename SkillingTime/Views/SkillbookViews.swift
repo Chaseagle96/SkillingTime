@@ -4,7 +4,9 @@ import SwiftUI
 struct SkillbookView: View {
     @Environment(\.modelContext) private var modelContext
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
+    @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var sessionController: SessionController
+    @AppStorage(SkillbookLayout.storageKey) private var preferredColumnCount = SkillbookLayout.defaultColumnCount
     @Query(sort: \LifeSkill.sortOrder) private var allSkills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
     @Query private var specializations: [SkillSpecialization]
@@ -15,10 +17,23 @@ struct SkillbookView: View {
     @State private var persistenceError: String?
     @Namespace private var skillTransition
 
-    private let columns = [
-        GridItem(.flexible(), spacing: 12),
-        GridItem(.flexible(), spacing: 12)
-    ]
+    private var columnCount: Int {
+        SkillbookLayout.columnCount(
+            preferred: preferredColumnCount,
+            isAccessibilitySize: dynamicTypeSize.isAccessibilitySize
+        )
+    }
+
+    private var density: SkillCardDensity {
+        SkillCardDensity(columnCount: columnCount)
+    }
+
+    private var columns: [GridItem] {
+        Array(
+            repeating: GridItem(.flexible(), spacing: density.spacing),
+            count: columnCount
+        )
+    }
 
     private var activeSkills: [LifeSkill] {
         allSkills.filter { !$0.isArchived }
@@ -52,7 +67,7 @@ struct SkillbookView: View {
                             : "Restore a retired Skill or create a new path. Your lifetime history remains preserved."
                     )
                 } else {
-                    LazyVGrid(columns: columns, spacing: 12) {
+                    LazyVGrid(columns: columns, spacing: density.spacing) {
                         ForEach(
                             Array(activeSkills.enumerated()),
                             id: \.element.id
@@ -83,6 +98,23 @@ struct SkillbookView: View {
                     }
                     .accessibilityLabel("Retired Skills")
                 }
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                Menu {
+                    Picker("Columns", selection: $preferredColumnCount) {
+                        ForEach(SkillbookLayout.columnOptions, id: \.self) { count in
+                            Label("\(count) Columns", systemImage: SkillbookLayout.symbol(for: count))
+                                .tag(count)
+                        }
+                    }
+                    if dynamicTypeSize.isAccessibilitySize {
+                        Text("Larger text sizes use two columns.")
+                    }
+                } label: {
+                    Image(systemName: SkillbookLayout.symbol(for: columnCount))
+                }
+                .accessibilityLabel("Skill layout, \(columnCount) columns")
             }
 
             ToolbarItem(placement: .topBarTrailing) {
@@ -156,6 +188,7 @@ struct SkillbookView: View {
     ) -> some View {
         SkillCard(
             skill: skill,
+            density: density,
             totalSeconds: totalSeconds,
             specializationTitle: specializations.first {
                 $0.skillID == skill.id
@@ -301,8 +334,54 @@ struct SkillbookView: View {
     }
 }
 
+/// Two columns is the full card; three and four trade detail for more Skills on
+/// screen. The accessibility label always carries the full description.
+enum SkillCardDensity {
+    case regular
+    case compact
+    case dense
+
+    init(columnCount: Int) {
+        switch columnCount {
+        case ...2: self = .regular
+        case 3: self = .compact
+        default: self = .dense
+        }
+    }
+
+    var spacing: CGFloat {
+        switch self {
+        case .regular: 12
+        case .compact: 10
+        case .dense: 8
+        }
+    }
+}
+
+enum SkillbookLayout {
+    static let storageKey = "skillbook.grid-columns"
+    static let defaultColumnCount = 2
+    static let columnOptions = [2, 3, 4]
+
+    /// Clamps a stored preference to a supported value; the largest text sizes
+    /// always use two columns so names and levels stay readable.
+    static func columnCount(preferred: Int, isAccessibilitySize: Bool) -> Int {
+        guard !isAccessibilitySize else { return 2 }
+        return min(max(preferred, columnOptions.first ?? 2), columnOptions.last ?? 4)
+    }
+
+    static func symbol(for columnCount: Int) -> String {
+        switch columnCount {
+        case ...2: "square.grid.2x2"
+        case 3: "square.grid.3x3"
+        default: "square.grid.4x3.fill"
+        }
+    }
+}
+
 private struct SkillCard: View {
     let skill: LifeSkill
+    var density: SkillCardDensity = .regular
     let totalSeconds: Int
     let specializationTitle: String?
 
@@ -318,7 +397,47 @@ private struct SkillCard: View {
         )
     }
 
+    private var cornerRadius: CGFloat {
+        switch density {
+        case .regular: 20
+        case .compact: 16
+        case .dense: 14
+        }
+    }
+
     var body: some View {
+        Group {
+            switch density {
+            case .regular: regularContent
+            case .compact: compactContent
+            case .dense: denseContent
+            }
+        }
+        .background(
+            LinearGradient(
+                colors: [Color.white.opacity(0.065), accent.opacity(0.045)],
+                startPoint: .topLeading,
+                endPoint: .bottomTrailing
+            ),
+            in: RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+        )
+        .overlay {
+            RoundedRectangle(cornerRadius: cornerRadius, style: .continuous)
+                .strokeBorder(
+                    SkillingTimeTheme.rankColor(progress.rank)
+                        .opacity(progress.rank == .novice ? 0.13 : 0.34),
+                    lineWidth: 1
+                )
+        }
+        .accessibilityElement(children: .ignore)
+        .accessibilityLabel(skill.name)
+        .accessibilityValue(
+            "Level \(progress.level), \(progress.displayRank), \(Int(progress.fractionComplete * 100)) percent to next progression threshold"
+        )
+        .accessibilityHint("Opens Skill details")
+    }
+
+    private var regularContent: some View {
         VStack(alignment: .leading, spacing: 12) {
             HStack(alignment: .top) {
                 SkillGlyph(
@@ -375,28 +494,81 @@ private struct SkillCard: View {
             .foregroundStyle(.secondary)
         }
         .padding(14)
-        .background(
-            LinearGradient(
-                colors: [Color.white.opacity(0.065), accent.opacity(0.045)],
-                startPoint: .topLeading,
-                endPoint: .bottomTrailing
-            ),
-            in: RoundedRectangle(cornerRadius: 20, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 20, style: .continuous)
-                .strokeBorder(
-                    SkillingTimeTheme.rankColor(progress.rank)
-                        .opacity(progress.rank == .novice ? 0.13 : 0.34),
-                    lineWidth: 1
+    }
+
+    /// Three columns: glyph and level, name, rank, progress, time.
+    private var compactContent: some View {
+        VStack(alignment: .leading, spacing: 8) {
+            HStack(alignment: .top, spacing: 4) {
+                SkillGlyph(
+                    symbolName: skill.symbolName,
+                    color: accent,
+                    size: 34,
+                    rank: progress.rank
                 )
+                Spacer(minLength: 0)
+                Text(progress.level.formatted())
+                    .font(.system(.title3, design: .rounded, weight: .bold))
+                    .contentTransition(.numericText())
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+            }
+
+            VStack(alignment: .leading, spacing: 2) {
+                Text(skill.name)
+                    .font(.subheadline.weight(.semibold))
+                    .foregroundStyle(.primary)
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.7)
+                Text(progress.displayRank)
+                    .font(.caption2.weight(.bold))
+                    .foregroundStyle(SkillingTimeTheme.rankColor(progress.rank))
+                    .lineLimit(1)
+                    .minimumScaleFactor(0.8)
+            }
+
+            SkillProgressBar(
+                fraction: progress.fractionComplete,
+                accent: accent,
+                height: 5
+            )
+
+            Text(DurationText.compact(totalSeconds))
+                .font(.caption2)
+                .foregroundStyle(.secondary)
+                .lineLimit(1)
         }
-        .accessibilityElement(children: .ignore)
-        .accessibilityLabel(skill.name)
-        .accessibilityValue(
-            "Level \(progress.level), \(progress.displayRank), \(Int(progress.fractionComplete * 100)) percent to next progression threshold"
-        )
-        .accessibilityHint("Opens Skill details")
+        .padding(10)
+    }
+
+    /// Four columns: glyph, name, level, and progress only.
+    private var denseContent: some View {
+        VStack(spacing: 6) {
+            SkillGlyph(
+                symbolName: skill.symbolName,
+                color: accent,
+                size: 30,
+                rank: progress.rank
+            )
+            Text(skill.name)
+                .font(.caption.weight(.semibold))
+                .foregroundStyle(.primary)
+                .lineLimit(1)
+                .minimumScaleFactor(0.65)
+            Text("Lv \(progress.level.formatted())")
+                .font(.system(.caption2, design: .rounded, weight: .bold))
+                .foregroundStyle(SkillingTimeTheme.rankColor(progress.rank))
+                .contentTransition(.numericText())
+                .lineLimit(1)
+            SkillProgressBar(
+                fraction: progress.fractionComplete,
+                accent: accent,
+                height: 4
+            )
+        }
+        .frame(maxWidth: .infinity)
+        .padding(.horizontal, 8)
+        .padding(.vertical, 10)
     }
 }
 
