@@ -3,7 +3,7 @@ name: Build Skilling Time iPhoneOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [ main, audit-fixes ]
+    branches: [ main, audit-fixes, 'features-*' ]
   pull_request:
     branches: [ main ]
 
@@ -19,7 +19,7 @@ jobs:
     env:
       # Artifact names are derived from MARKETING_VERSION in the project, so a
       # version bump needs no workflow edit. Only the release codename lives here.
-      RELEASE_NAME: The-Awakening
+      RELEASE_NAME: Preview
 
     steps:
       - name: Checkout
@@ -225,6 +225,32 @@ jobs:
             ${{ env.ARTIFACT_BASE }}-validation.txt
           if-no-files-found: error
           retention-days: 30
+
+      - name: Report compile and test failures as annotations
+        # Annotations are readable through the public checks API, so failures can
+        # be diagnosed without downloading the diagnostics artifact.
+        if: failure()
+        shell: bash
+        run: |
+          reported=0
+          for log in "$RUNNER_TEMP/xcodebuild-tests.log" "$RUNNER_TEMP/xcodebuild.log"; do
+            [ -f "$log" ] || continue
+            while IFS= read -r line; do
+              file=$(printf '%s' "$line" | cut -d: -f1)
+              lineno=$(printf '%s' "$line" | cut -d: -f2)
+              message=$(printf '%s' "$line" | sed -E 's/^[^:]+:[0-9]+(:[0-9]+)?: (fatal )?error: //')
+              echo "::error file=${file#"$GITHUB_WORKSPACE/"},line=$lineno::$message"
+              reported=$((reported + 1))
+            done < <(grep -E '^/[^:]+:[0-9]+(:[0-9]+)?: (fatal )?error: ' "$log" | sort -u | head -40)
+          done
+          if [ "$reported" -eq 0 ]; then
+            for log in "$RUNNER_TEMP/xcodebuild-tests.log" "$RUNNER_TEMP/xcodebuild.log"; do
+              [ -f "$log" ] || continue
+              grep -E 'error:|\*\* (BUILD|TEST) FAILED|Testing failed' "$log" | head -15 | while IFS= read -r line; do
+                echo "::error::$line"
+              done
+            done
+          fi
 
       - name: Upload build diagnostics on failure
         if: failure()

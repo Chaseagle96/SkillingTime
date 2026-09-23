@@ -634,6 +634,8 @@ private struct CharacterSettingsView: View {
                     Text("Notify me when an active session reaches its next Skill level or Mastery star. This setting applies immediately; Save and Cancel only affect your identity.")
                 }
 
+                BackupSettingsSection()
+
                 if let saveError {
                     Section("Could Not Save") {
                         Label(saveError, systemImage: "exclamationmark.triangle.fill")

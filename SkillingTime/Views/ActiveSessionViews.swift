@@ -39,9 +39,12 @@ struct ActiveSessionView: View {
         NavigationStack {
             Group {
                 if let outcome {
-                    SessionSummaryView(outcome: outcome) {
-                        dismiss()
-                    }
+                    SessionSummaryView(
+                        outcome: outcome,
+                        done: { dismiss() },
+                        oneMoreLevel: oneMoreLevelOffer(for: outcome),
+                        keepGoing: { keepGoing() }
+                    )
                 } else if let skill,
                           let snapshot = sessionController.activeSession,
                           snapshot.skillID == skillID {
@@ -377,6 +380,34 @@ struct ActiveSessionView: View {
         }
     }
 
+    /// "One More Level?" is offered only right after a timer session, when the
+    /// next level is within reach and no other timer is running.
+    private func oneMoreLevelOffer(for outcome: SessionOutcome) -> OneMoreLevelOffer? {
+        guard !outcome.wasAlreadyCommitted,
+              sessionController.activeSession == nil,
+              let skill,
+              !skill.isArchived else { return nil }
+        return OneMoreLevel.offer(
+            totalSeconds: max(0, ledgers.first?.totalActiveSeconds ?? 0),
+            curveVersion: skill.progressionCurveVersion
+        )
+    }
+
+    private func keepGoing() {
+        guard let skill,
+              sessionController.start(skillID: skill.id, focusGoal: nil) else { return }
+        Haptics.sessionStart()
+        baseTotalSeconds = max(0, ledgers.first?.totalActiveSeconds ?? 0)
+        lastObservedLevel = ProgressionEngine.level(
+            forTotalXP: ProgressionEngine.xp(
+                forActiveSeconds: baseTotalSeconds,
+                curveVersion: skill.progressionCurveVersion
+            ),
+            curveVersion: skill.progressionCurveVersion
+        )
+        outcome = nil
+    }
+
     private func commitSession(
         draft: CompletedSessionDraft,
         countedSeconds: Int,
@@ -589,6 +620,8 @@ private struct FinishSessionSheet: View {
 struct SessionSummaryView: View {
     let outcome: SessionOutcome
     let done: () -> Void
+    var oneMoreLevel: OneMoreLevelOffer? = nil
+    var keepGoing: (() -> Void)? = nil
 
     @State private var revealStarted = false
 
@@ -634,6 +667,35 @@ struct SessionSummaryView: View {
                     .foregroundStyle(.secondary)
                     .multilineTextAlignment(.center)
                     .padding(14)
+                }
+
+                if let oneMoreLevel, let keepGoing {
+                    VStack(spacing: 10) {
+                        Label("One More Level?", systemImage: "arrow.up.forward.circle.fill")
+                            .font(.headline)
+                            .foregroundStyle(accent)
+                        Text(oneMoreLevel.promptText)
+                            .font(.subheadline)
+                            .foregroundStyle(.secondary)
+                            .multilineTextAlignment(.center)
+                        Button {
+                            keepGoing()
+                        } label: {
+                            Label("Keep Going", systemImage: "play.fill")
+                                .font(.headline)
+                                .frame(maxWidth: .infinity)
+                                .padding(.vertical, 12)
+                        }
+                        .buttonStyle(.bordered)
+                        .tint(accent)
+                    }
+                    .padding(16)
+                    .frame(maxWidth: .infinity)
+                    .background(
+                        accent.opacity(0.12),
+                        in: RoundedRectangle(cornerRadius: 20, style: .continuous)
+                    )
+                    .skillingTimeReveal(order: 9, trigger: revealStarted)
                 }
 
                 Button("Continue", action: done)

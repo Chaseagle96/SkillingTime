@@ -95,7 +95,7 @@ struct RootTabView: View {
                 preparationFailures.append("Skill setup: \(error.localizedDescription)")
             }
             do {
-                try RewardBackfillService.reconcileAll(in: modelContext)
+                try reconcileRewardHistoryIfNeeded()
             } catch {
                 preparationFailures.append("Reward history: \(error.localizedDescription)")
             }
@@ -129,15 +129,25 @@ struct RootTabView: View {
             clearRecoveredCommittedTimer()
             handleOpenedNotification(notificationManager.openedSessionID)
             synchronizeAmbientSessionSoon()
+            refreshExtensions()
+            startPendingSkillIfRequested()
         }
         .onChange(of: sessionController.activeSession) { _, _ in
             synchronizeAmbientSessionSoon()
         }
         .onChange(of: ledgerFingerprints) { _, _ in
             synchronizeAmbientSessionSoon()
+            refreshExtensions()
         }
         .onChange(of: skillFingerprints) { _, _ in
             synchronizeAmbientSessionSoon()
+            refreshExtensions()
+        }
+        .onReceive(
+            NotificationCenter.default.publisher(for: UserDefaults.didChangeNotification)
+        ) { _ in
+            // Siri, Shortcuts, and the widgets hand start requests over here.
+            startPendingSkillIfRequested()
         }
         .onChange(of: questFingerprints) { _, _ in
             synchronizeAmbientSessionSoon()
@@ -152,9 +162,13 @@ struct RootTabView: View {
             handleOpenedNotification(sessionID)
         }
         .onChange(of: scenePhase) { _, phase in
+            if phase == .background {
+                refreshExtensions()
+            }
             guard phase == .active else { return }
             sessionController.refreshFromSharedStorage()
             clearRecoveredCommittedTimer()
+            startPendingSkillIfRequested()
             do {
                 _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
             } catch {
@@ -321,6 +335,46 @@ struct RootTabView: View {
         presenter.present(skillID: skillID)
     }
 
+    private func startPendingSkillIfRequested() {
+        guard let skillID = WidgetSnapshotStore.takePendingStart() else { return }
+        startSkill(skillID)
+    }
+
+    /// Starts a Skill requested from outside the app. A running timer is never
+    /// replaced; it is shown instead.
+    private func startSkill(_ skillID: UUID) {
+        if let active = sessionController.activeSession {
+            openActiveSession(skillID: active.skillID)
+            return
+        }
+        guard let skill = skills.first(where: { $0.id == skillID && !$0.isArchived }),
+              sessionController.start(skillID: skill.id, focusGoal: nil) else { return }
+        Haptics.sessionStart()
+        openActiveSession(skillID: skill.id)
+    }
+
+    /// Keeps widgets, the Control Center control, Siri's Skill list, and practice
+    /// reminders in step with the latest history.
+    private func refreshExtensions() {
+        WidgetSnapshotPublisher.publish(in: modelContext)
+        Task {
+            await PracticeReminderScheduler.reschedule(in: modelContext)
+        }
+    }
+
+    private func reconcileRewardHistoryIfNeeded() throws {
+        let sessions = try modelContext.fetch(FetchDescriptor<SkillSession>())
+        let build = Bundle.main.object(forInfoDictionaryKey: "CFBundleVersion") as? String ?? "0"
+        let fingerprint = RewardBackfillGate.fingerprint(
+            skills: skills,
+            sessions: sessions,
+            appBuild: build
+        )
+        guard !RewardBackfillGate.isCurrent(fingerprint) else { return }
+        try RewardBackfillService.reconcileAll(in: modelContext)
+        RewardBackfillGate.record(fingerprint)
+    }
+
     /// If the app stopped after SwiftData saved a session but before the timer was
     /// cleared, the timer comes back "awaiting commit". Its UUID is already in
     /// history, so clear it here rather than letting Cancel resume a saved session.
@@ -347,8 +401,18 @@ struct RootTabView: View {
     }
 
     private func handleDeepLink(_ url: URL) {
-        guard ["skillingtime", "skillbook"].contains(url.scheme?.lowercased() ?? ""),
-              url.host == "session",
+        guard ["skillingtime", "skillbook"].contains(url.scheme?.lowercased() ?? "") else { return }
+
+        // skillingtime://start/<skill-id> from the Lock Screen quick-start widget.
+        if url.host == "start" {
+            let identifier = url.pathComponents.first { $0 != "/" }
+            if let identifier, let skillID = UUID(uuidString: identifier) {
+                startSkill(skillID)
+            }
+            return
+        }
+
+        guard url.host == "session",
               let snapshot = sessionController.activeSession else { return }
 
         let components = url.pathComponents.filter { $0 != "/" }

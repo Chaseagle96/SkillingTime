@@ -15,6 +15,7 @@ struct SkillDetailView: View {
 
     @State private var showingManualEntry = false
     @State private var showingFocusGoal = false
+    @State private var showingReminder = false
     /// Set by the Focus Goal sheet; the session starts once that sheet is gone so
     /// the timer screen is never presented while another sheet is still dismissing.
     @State private var pendingStart: PendingSessionStart?
@@ -119,6 +120,10 @@ struct SkillDetailView: View {
                 }
                 statisticsGrid
                     .skillingTimeReveal(order: 2)
+                if !sessions.isEmpty {
+                    SkillPaceSection(skill: skill, sessions: sessions)
+                        .skillingTimeReveal(order: 3)
+                }
                 masteryProgression
                     .skillingTimeReveal(order: 3)
                 recentHistory
@@ -136,6 +141,13 @@ struct SkillDetailView: View {
                         showingEditSkill = true
                     } label: {
                         Label("Edit Skill", systemImage: "pencil")
+                    }
+                    if !skill.isArchived {
+                        Button {
+                            showingReminder = true
+                        } label: {
+                            Label("Practice Reminder", systemImage: "bell")
+                        }
                     }
                     if hasSpecializationCapability {
                         Button {
@@ -171,6 +183,9 @@ struct SkillDetailView: View {
                 }
                 .accessibilityLabel("Skill options")
             }
+        }
+        .sheet(isPresented: $showingReminder) {
+            PracticeReminderSheet(skill: skill)
         }
         .sheet(isPresented: $showingFocusGoal, onDismiss: {
             if let pendingStart {
