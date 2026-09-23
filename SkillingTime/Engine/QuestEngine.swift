@@ -173,10 +173,13 @@ enum QuestEngine {
         let desiredCount = cadence == .daily
             ? dailyAssignmentCount
             : weeklyAssignmentCount
+        // An assignment still running from a previous time zone or week definition
+        // keeps its slot until its period ends, so travel never doubles the board.
         let activeInPeriod = existingAssignments.filter {
             !$0.isRetired
                 && $0.cadence == cadence
-                && sameInstant($0.periodStart, interval.start)
+                && (sameInstant($0.periodStart, interval.start)
+                    || ($0.periodStart <= now && now < $0.periodEnd))
         }
         let occupiedSlots = Set(activeInPeriod.map(\.slot))
         let usedTemplateIDs = Set(activeInPeriod.map(\.templateID))
@@ -307,7 +310,9 @@ enum QuestEngine {
             isTimeBased = true
             liveProgressLabel = nil
         case .deepSession:
-            current = max(assignment.currentValue, sessionSeconds)
+            // Deep Session needs one session to reach the target, so an earlier
+            // shorter session must not shorten this session's countdown.
+            current = sessionSeconds
             target = max(1, assignment.targetValue)
             isTimeBased = true
             liveProgressLabel = nil
@@ -349,9 +354,11 @@ enum QuestEngine {
         let timerEnd: Date?
         if isTimeBased,
            !snapshot.isPaused,
-           let segmentStartedAt = snapshot.activeSegmentStartedAt,
+           snapshot.activeSegmentStartedAt != nil,
            current < target {
-            virtualTimerStart = segmentStartedAt.addingTimeInterval(TimeInterval(-current))
+            // `current` already includes time elapsed up to `date`; anchoring to the
+            // segment start would count that elapsed time twice.
+            virtualTimerStart = date.addingTimeInterval(TimeInterval(-current))
             timerEnd = virtualTimerStart?.addingTimeInterval(TimeInterval(target))
         } else {
             virtualTimerStart = nil
@@ -706,11 +713,11 @@ enum QuestEngine {
         case .journeymanXP:
             return "\(min(safeCurrent, safeTarget).formatted()) of \(safeTarget.formatted()) XP"
         case .distinctSkills:
-            return "\(min(safeCurrent, safeTarget)) of \(safeTarget) Skills"
+            return "\(min(safeCurrent, safeTarget)) of \(safeTarget) \(safeTarget == 1 ? "Skill" : "Skills")"
         case .sameSkillSessions, .oldFriend, .focusGoal, .sessionCount:
-            return "\(min(safeCurrent, safeTarget)) of \(safeTarget) sessions"
+            return "\(min(safeCurrent, safeTarget)) of \(safeTarget) \(safeTarget == 1 ? "session" : "sessions")"
         case .gainLevels:
-            return "\(min(safeCurrent, safeTarget)) of \(safeTarget) levels"
+            return "\(min(safeCurrent, safeTarget)) of \(safeTarget) \(safeTarget == 1 ? "level" : "levels")"
         }
     }
 
@@ -824,10 +831,8 @@ enum QuestEngine {
         }
         return skills
             .filter { skill in
-                if let latest = latestBySkill[skill.id] {
-                    return latest < cutoff
-                }
-                return skill.createdAt < cutoff
+                guard let latest = latestBySkill[skill.id] else { return false }
+                return latest < cutoff
             }
             .sorted {
                 let lhs = latestBySkill[$0.id]
@@ -1006,6 +1011,7 @@ enum QuestBoardService {
             let sessions = try modelContext.fetch(FetchDescriptor<SkillSession>())
             var assignments = try modelContext.fetch(FetchDescriptor<QuestAssignment>())
             let pathAssignments = try modelContext.fetch(FetchDescriptor<SkillPathAssignment>())
+            retireAssignmentsForRetiredSkills(assignments: assignments, skills: skills, now: now)
 
             for cadence in QuestCadence.allCases {
                 let generated = QuestEngine.makeAssignments(
@@ -1052,6 +1058,7 @@ enum QuestBoardService {
         calendar: Calendar = .current,
         now: Date = .now
     ) {
+        retireAssignmentsForRetiredSkills(assignments: assignments, skills: skills, now: now)
         for cadence in QuestCadence.allCases {
             let generated = QuestEngine.makeAssignments(
                 cadence: cadence,
@@ -1066,6 +1073,26 @@ enum QuestBoardService {
                 modelContext.insert(assignment)
                 assignments.append(assignment)
             }
+        }
+    }
+
+    /// Retires unfinished, still-running assignments aimed at a Skill that has
+    /// since been retired; retired Skills cannot start sessions, so the quest could
+    /// never be completed. The freed slot is refilled by normal generation.
+    static func retireAssignmentsForRetiredSkills(
+        assignments: [QuestAssignment],
+        skills: [LifeSkill],
+        now: Date = .now
+    ) {
+        let retiredSkillIDs = Set(skills.filter(\.isArchived).map(\.id))
+        guard !retiredSkillIDs.isEmpty else { return }
+        for assignment in assignments
+        where !assignment.isRetired
+            && assignment.completedAt == nil
+            && now < assignment.periodEnd {
+            guard let targetSkillID = assignment.targetSkillID,
+                  retiredSkillIDs.contains(targetSkillID) else { continue }
+            assignment.retiredAt = now
         }
     }
 
@@ -1084,6 +1111,19 @@ enum QuestBoardService {
         }
 
         for assignment in assignments where !assignment.isRetired {
+            let containsTrigger = triggeringSession.map {
+                assignment.periodStart <= $0.creditedAt
+                    && $0.creditedAt < assignment.periodEnd
+            } ?? false
+            // Closed periods are frozen history. The only exception is the timer
+            // session being saved right now (for example one that ended before
+            // midnight and was saved after it). Backdated manual entries cannot
+            // reopen a missed quest, and skipping closed periods keeps this pass
+            // proportional to the current board instead of all history.
+            let periodIsOpen = now < assignment.periodEnd
+            let isSavingTimerSession = containsTrigger && triggeringSession?.source == .timer
+            guard periodIsOpen || isSavingTimerSession else { continue }
+
             let previousValue = assignment.currentValue
             let value = QuestEngine.currentValue(
                 for: assignment,
@@ -1097,8 +1137,7 @@ enum QuestBoardService {
                   value >= assignment.targetValue else { continue }
 
             if let triggeringSession,
-               assignment.periodStart <= triggeringSession.creditedAt,
-               triggeringSession.creditedAt < assignment.periodEnd,
+               containsTrigger,
                previousValue < assignment.targetValue {
                 assignment.completedAt = triggeringSession.creditedAt
                 assignment.triggeringSessionID = triggeringSession.id

@@ -4,7 +4,6 @@ import UIKit
 import UserNotifications
 
 struct CharacterView: View {
-    @Environment(\.modelContext) private var modelContext
     @Query(sort: \LifeSkill.sortOrder) private var allSkills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
     @Query private var specializations: [SkillSpecialization]
@@ -21,7 +20,6 @@ struct CharacterView: View {
 
     @State private var showingSettings = false
     @State private var showingPathReview = false
-    @State private var preparationError: String?
 
     private var profile: CharacterProfile? { characterProfiles.first }
 
@@ -86,24 +84,6 @@ struct CharacterView: View {
         }
         .sheet(isPresented: $showingPathReview) {
             PathReviewView()
-        }
-        .alert(
-            "Character Could Not Refresh",
-            isPresented: Binding(
-                get: { preparationError != nil },
-                set: { if !$0 { preparationError = nil } }
-            )
-        ) {
-            Button("OK") { preparationError = nil }
-        } message: {
-            Text(preparationError ?? "Character progression remains recoverable from session history.")
-        }
-        .task {
-            do {
-                try CharacterProgressionService.prepare(in: modelContext)
-            } catch {
-                preparationError = error.localizedDescription
-            }
         }
         .skillingTimeScreenBackground()
     }
@@ -616,6 +596,8 @@ private struct CharacterSettingsView: View {
                                     )
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(SymbolNames.label(for: symbol))
+                            .accessibilityAddTraits(crestSymbolName == symbol ? .isSelected : [])
                         }
                     }
                 }
@@ -638,6 +620,8 @@ private struct CharacterSettingsView: View {
                                 .frame(width: 32, height: 32)
                             }
                             .buttonStyle(.plain)
+                            .accessibilityLabel(SymbolNames.colorLabel(for: hex))
+                            .accessibilityAddTraits(accentHex == hex ? .isSelected : [])
                         }
                     }
                 }
@@ -647,7 +631,7 @@ private struct CharacterSettingsView: View {
                 } header: {
                     Text("Progression Alerts")
                 } footer: {
-                    Text("Notify me when an active session reaches its next Skill level or Mastery star.")
+                    Text("Notify me when an active session reaches its next Skill level or Mastery star. This setting applies immediately; Save and Cancel only affect your identity.")
                 }
 
                 if let saveError {
@@ -671,13 +655,15 @@ private struct CharacterSettingsView: View {
                 }
             }
             .task {
-                await notificationManager.refreshAuthorizationStatus()
+                // Load the saved profile before any await so an early edit is never
+                // overwritten when the authorization check returns.
                 if let profile = profiles.first {
                     displayName = profile.displayName
                     crestSymbolName = profile.crestSymbolName
                     accentHex = profile.accentHex
                     equippedTitleID = profile.equippedTitleID ?? ""
                 }
+                await notificationManager.refreshAuthorizationStatus()
             }
         }
     }

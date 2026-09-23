@@ -684,6 +684,11 @@ enum SkillingTimeSchemaV4: VersionedSchema {
     }
 }
 
+/// V5 is the current schema, so it points at the live model classes.
+/// BEFORE changing any @Model in AppModels.swift: copy these live declarations
+/// into nested classes here (as V1–V4 do), then add SkillingTimeSchemaV6 and a
+/// migration stage. `SchemaSnapshotTests` fails if a live model changes without
+/// that step.
 enum SkillingTimeSchemaV5: VersionedSchema {
     static var versionIdentifier: Schema.Version { Schema.Version(5, 0, 0) }
     static var models: [any PersistentModel.Type] {

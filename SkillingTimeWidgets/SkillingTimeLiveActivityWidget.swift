@@ -248,18 +248,28 @@ private extension Color {
         var value: UInt64 = 0
         Scanner(string: cleaned).scanHexInt64(&value)
 
+        // Mirrors the app's Color(hex:) so accents render identically in both places.
         let red: Double
         let green: Double
         let blue: Double
-        if cleaned.count == 6 {
+        let alpha: Double
+        switch cleaned.count {
+        case 8:
+            red = Double((value >> 24) & 0xFF) / 255
+            green = Double((value >> 16) & 0xFF) / 255
+            blue = Double((value >> 8) & 0xFF) / 255
+            alpha = Double(value & 0xFF) / 255
+        case 6:
             red = Double((value >> 16) & 0xFF) / 255
             green = Double((value >> 8) & 0xFF) / 255
             blue = Double(value & 0xFF) / 255
-        } else {
+            alpha = 1
+        default:
             red = 0.82
             green = 0.66
             blue = 0.29
+            alpha = 1
         }
-        self.init(red: red, green: green, blue: blue)
+        self.init(.sRGB, red: red, green: green, blue: blue, opacity: alpha)
     }
 }

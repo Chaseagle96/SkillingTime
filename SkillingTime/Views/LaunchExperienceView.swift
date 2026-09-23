@@ -41,6 +41,8 @@ struct LaunchExperienceContainer<Content: View>: View {
         }
     }
 
+    /// Runs to completion even if cancelled: a cancelled sleep returns at once, so
+    /// the sequence still reveals the app instead of leaving the overlay stuck.
     @MainActor
     private func playLaunchExperience() async {
         guard overlayVisible else { return }
@@ -50,7 +52,6 @@ struct LaunchExperienceContainer<Content: View>: View {
         )
 
         await wait(plan.ignitionDelayNanoseconds)
-        guard !Task.isCancelled else { return }
         if plan.usesSpatialMotion {
             withAnimation(SkillingTimeMotion.ceremonial) {
                 markAwake = true
@@ -60,7 +61,6 @@ struct LaunchExperienceContainer<Content: View>: View {
         }
 
         await wait(plan.wordmarkDelayNanoseconds)
-        guard !Task.isCancelled else { return }
         withAnimation(
             plan.usesSpatialMotion ? SkillingTimeMotion.responsive : .easeOut(duration: 0.08)
         ) {
@@ -68,7 +68,6 @@ struct LaunchExperienceContainer<Content: View>: View {
         }
 
         await wait(plan.dismissalDelayNanoseconds)
-        guard !Task.isCancelled else { return }
         withAnimation(
             plan.usesSpatialMotion ? SkillingTimeMotion.gentle : .easeOut(duration: 0.10)
         ) {

@@ -127,6 +127,23 @@ enum SessionAnalytics {
         }
     }
 
+    /// Total Level counted only across Skills with recorded practice. Used for the
+    /// Total Level achievements; Lifetime Level still counts every Skill.
+    static func practicedTotalLevel(skills: [LifeSkill], index: SessionIndex) -> Int {
+        skills.reduce(0) { total, skill in
+            let statistics = index.statistics(for: skill.id)
+            guard statistics.sessionCount > 0 else { return total }
+            let xp = ProgressionEngine.xp(
+                forActiveSeconds: statistics.totalSeconds,
+                curveVersion: skill.progressionCurveVersion
+            )
+            return total + ProgressionEngine.level(
+                forTotalXP: xp,
+                curveVersion: skill.progressionCurveVersion
+            )
+        }
+    }
+
     static func progress(for skill: LifeSkill, index: SessionIndex) -> ProgressSnapshot {
         let seconds = index.statistics(for: skill.id).totalSeconds
         let xp = ProgressionEngine.xp(

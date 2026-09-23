@@ -3,7 +3,7 @@ name: Build Skilling Time iPhoneOS IPA
 on:
   workflow_dispatch:
   push:
-    branches: [ main ]
+    branches: [ main, audit-fixes ]
   pull_request:
     branches: [ main ]
 
@@ -17,7 +17,9 @@ jobs:
     timeout-minutes: 45
 
     env:
-      IPA_NAME: SkillingTime-v0.5.1-The-Awakening.ipa
+      # Artifact names are derived from MARKETING_VERSION in the project, so a
+      # version bump needs no workflow edit. Only the release codename lives here.
+      RELEASE_NAME: The-Awakening
 
     steps:
       - name: Checkout
@@ -48,6 +50,12 @@ jobs:
             -sdk iphoneos \
             -destination 'generic/platform=iOS' \
             -showBuildSettings | tee "$RUNNER_TEMP/build-settings.txt"
+
+          VERSION=$(awk -F' = ' '/^ *MARKETING_VERSION = /{print $2; exit}' "$RUNNER_TEMP/build-settings.txt")
+          test -n "$VERSION" || { echo 'ERROR: MARKETING_VERSION not found'; exit 1; }
+          ARTIFACT_BASE="SkillingTime-v${VERSION}-${RELEASE_NAME}"
+          echo "ARTIFACT_BASE=$ARTIFACT_BASE" >> "$GITHUB_ENV"
+          echo "IPA_NAME=$ARTIFACT_BASE.ipa" >> "$GITHUB_ENV"
 
       - name: Run progression, Character, Questboard, motion, and migration tests
         run: |
@@ -205,16 +213,16 @@ jobs:
           lipo -archs "$IPA_EXT/SkillingTimeWidgets" | grep -qw arm64
 
           shasum -a 256 "$IPA_NAME" | tee "$IPA_NAME.sha256"
-          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > SkillingTime-v0.5.1-The-Awakening-validation.txt
+          cat "$RUNNER_TEMP/bundle-validation.txt" "$RUNNER_TEMP/ipa-contents.txt" > "$ARTIFACT_BASE-validation.txt"
 
       - name: Upload validated IPA artifact
         uses: actions/upload-artifact@v4
         with:
-          name: SkillingTime-v0.5.1-The-Awakening
+          name: ${{ env.ARTIFACT_BASE }}
           path: |
-            SkillingTime-v0.5.1-The-Awakening.ipa
-            SkillingTime-v0.5.1-The-Awakening.ipa.sha256
-            SkillingTime-v0.5.1-The-Awakening-validation.txt
+            ${{ env.ARTIFACT_BASE }}.ipa
+            ${{ env.ARTIFACT_BASE }}.ipa.sha256
+            ${{ env.ARTIFACT_BASE }}-validation.txt
           if-no-files-found: error
           retention-days: 30
 

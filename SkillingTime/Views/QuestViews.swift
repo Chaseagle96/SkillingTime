@@ -4,6 +4,7 @@ import SwiftUI
 struct TodayView: View {
     @Environment(\.modelContext) private var modelContext
     @EnvironmentObject private var sessionController: SessionController
+    @EnvironmentObject private var presenter: ActiveSessionPresenter
     @Query(sort: \LifeSkill.sortOrder) private var skills: [LifeSkill]
     @Query(sort: \QuestAssignment.periodStart, order: .reverse)
     private var assignments: [QuestAssignment]
@@ -13,7 +14,6 @@ struct TodayView: View {
     @Query(sort: \ExpertChallenge.startedAt, order: .reverse)
     private var expertChallenges: [ExpertChallenge]
 
-    @State private var showingActiveSession = false
     @State private var preparationError: String?
 
     var body: some View {
@@ -50,11 +50,6 @@ struct TodayView: View {
         .navigationTitle("Today")
         .navigationBarTitleDisplayMode(.inline)
         .skillingTimeScreenBackground()
-        .fullScreenCover(isPresented: $showingActiveSession) {
-            if let skillID = sessionController.activeSession?.skillID {
-                ActiveSessionView(skillID: skillID)
-            }
-        }
         .alert(
             "Questboard Error",
             isPresented: Binding(
@@ -321,7 +316,7 @@ struct TodayView: View {
         if let snapshot = sessionController.activeSession,
            let skill = skills.first(where: { $0.id == snapshot.skillID }) {
             Button {
-                showingActiveSession = true
+                presenter.present(skillID: skill.id)
             } label: {
                 HStack(spacing: 13) {
                     SkillGlyph(

@@ -534,10 +534,15 @@ enum CharacterProgressionService {
             forActiveSeconds: seconds,
             curveVersion: skill.progressionCurveVersion
         )
-        guard ProgressionEngine.level(
-            forTotalXP: xp,
-            curveVersion: skill.progressionCurveVersion
-        ) >= 75 else {
+        guard try hasCapability(
+            skill: skill,
+            milestone: 75,
+            currentLevel: ProgressionEngine.level(
+                forTotalXP: xp,
+                curveVersion: skill.progressionCurveVersion
+            ),
+            in: modelContext
+        ) else {
             throw CharacterProgressionError.expertRankRequired
         }
         let existing = try modelContext.fetch(FetchDescriptor<ExpertChallenge>())
@@ -584,10 +589,15 @@ enum CharacterProgressionService {
             forActiveSeconds: seconds,
             curveVersion: skill.progressionCurveVersion
         )
-        guard ProgressionEngine.level(
-            forTotalXP: xp,
-            curveVersion: skill.progressionCurveVersion
-        ) >= 100 else {
+        guard try hasCapability(
+            skill: skill,
+            milestone: 100,
+            currentLevel: ProgressionEngine.level(
+                forTotalXP: xp,
+                curveVersion: skill.progressionCurveVersion
+            ),
+            in: modelContext
+        ) else {
             throw CharacterProgressionError.masterRankRequired
         }
         let trimmed = masterTitle.trimmingCharacters(in: .whitespacesAndNewlines)
@@ -629,6 +639,26 @@ enum CharacterProgressionService {
             )
         }
         try modelContext.save()
+    }
+
+    /// A rank capability stays earned once its Chronicle chapter is unlocked, even if
+    /// a later correction lowers the level. This matches what Skill detail shows.
+    private static func hasCapability(
+        skill: LifeSkill,
+        milestone: Int,
+        currentLevel: Int,
+        in modelContext: ModelContext
+    ) throws -> Bool {
+        if currentLevel >= milestone { return true }
+        let skillID = skill.id
+        let unlocks = try modelContext.fetch(
+            FetchDescriptor<ChronicleUnlock>(
+                predicate: #Predicate<ChronicleUnlock> { unlock in
+                    unlock.skillID == skillID
+                }
+            )
+        )
+        return unlocks.contains { $0.milestoneLevel >= milestone }
     }
 
     private static func ensureAssignments(
@@ -786,12 +816,21 @@ enum CharacterProgressionService {
             }
             challenge.currentValue = max(0, value)
 
-            guard challenge.completedAt == nil, value >= challenge.targetValue else { continue }
+            let triggerInWindow = triggeringSession.map {
+                $0.skillID == challenge.skillID
+                    && challenge.startedAt <= $0.creditedAt
+                    && $0.creditedAt < challenge.endsAt
+            } ?? false
+            // A closed challenge window is final, except for the timer session being
+            // saved right now. Backdated manual entries cannot complete it afterward.
+            let windowIsOpen = now < challenge.endsAt
+            let isSavingTimerSession = triggerInWindow && triggeringSession?.source == .timer
+            guard challenge.completedAt == nil,
+                  value >= challenge.targetValue,
+                  windowIsOpen || isSavingTimerSession else { continue }
             let completingSession: SkillSession?
             if let triggeringSession,
-               triggeringSession.skillID == challenge.skillID,
-               challenge.startedAt <= triggeringSession.creditedAt,
-               triggeringSession.creditedAt < challenge.endsAt,
+               triggerInWindow,
                previousValue < challenge.targetValue {
                 completingSession = triggeringSession
             } else {

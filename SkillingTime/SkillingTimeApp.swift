@@ -7,7 +7,10 @@ struct SkillingTimeApp: App {
     @StateObject private var liveActivityCoordinator = LiveActivityCoordinator()
     @StateObject private var notificationManager = ProgressionNotificationManager()
 
-    private let modelContainer: ModelContainer = {
+    /// Opening the store can fail (for example after an interrupted migration).
+    /// Instead of crashing on every launch, a failure shows a recovery screen that
+    /// leaves the files untouched and lets the person export them.
+    private let storage: Result<ModelContainer, Error> = {
         let schema = Schema(versionedSchema: SkillingTimeSchemaV5.self)
 
         // Keep the legacy store configuration name so upgrades from Skillbook
@@ -19,25 +22,91 @@ struct SkillingTimeApp: App {
         )
 
         do {
-            return try ModelContainer(
-                for: schema,
-                migrationPlan: SkillingTimeMigrationPlan.self,
-                configurations: [configuration]
+            return .success(
+                try ModelContainer(
+                    for: schema,
+                    migrationPlan: SkillingTimeMigrationPlan.self,
+                    configurations: [configuration]
+                )
             )
         } catch {
-            fatalError("Unable to initialize Skilling Time storage: \(error)")
+            return .failure(error)
         }
     }()
 
     var body: some Scene {
         WindowGroup {
-            LaunchExperienceContainer {
-                RootTabView()
-            }
+            switch storage {
+            case .success(let container):
+                LaunchExperienceContainer {
+                    RootTabView()
+                }
                 .environmentObject(sessionController)
                 .environmentObject(liveActivityCoordinator)
                 .environmentObject(notificationManager)
+                .modelContainer(container)
+            case .failure(let error):
+                StorageRecoveryView(errorDescription: String(describing: error))
+            }
         }
-        .modelContainer(modelContainer)
+    }
+}
+
+private struct StorageRecoveryView: View {
+    let errorDescription: String
+
+    /// SwiftData keeps a named configuration's files in Application Support,
+    /// prefixed with the configuration name (the store plus its -wal/-shm files).
+    private var storeFiles: [URL] {
+        let contents = (try? FileManager.default.contentsOfDirectory(
+            at: URL.applicationSupportDirectory,
+            includingPropertiesForKeys: nil
+        )) ?? []
+        return contents
+            .filter { $0.lastPathComponent.hasPrefix("Skillbook") }
+            .sorted { $0.lastPathComponent < $1.lastPathComponent }
+    }
+
+    var body: some View {
+        NavigationStack {
+            ScrollView {
+                VStack(alignment: .leading, spacing: 16) {
+                    Label(
+                        "Your Skillbook could not be opened",
+                        systemImage: "exclamationmark.triangle.fill"
+                    )
+                    .font(.title3.weight(.semibold))
+                    .foregroundStyle(SkillingTimeTheme.gold)
+
+                    Text(
+                        "Skilling Time did not change or delete anything. Your history is still on this device. Export the data files and keep them somewhere safe before updating or reinstalling."
+                    )
+
+                    let files = storeFiles
+                    if files.isEmpty {
+                        Text("No data files were found to export.")
+                            .foregroundStyle(.secondary)
+                    } else {
+                        ShareLink(items: files) {
+                            Label("Export Data Files", systemImage: "square.and.arrow.up")
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(SkillingTimeTheme.gold)
+                    }
+
+                    Text("Details")
+                        .font(.headline)
+                    Text(errorDescription)
+                        .font(.caption.monospaced())
+                        .foregroundStyle(.secondary)
+                        .textSelection(.enabled)
+                }
+                .padding(20)
+                .frame(maxWidth: .infinity, alignment: .leading)
+            }
+            .navigationTitle("Skilling Time")
+            .skillingTimeScreenBackground()
+        }
+        .preferredColorScheme(.dark)
     }
 }
