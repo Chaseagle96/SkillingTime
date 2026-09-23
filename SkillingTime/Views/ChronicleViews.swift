@@ -15,15 +15,17 @@ struct ChronicleRootView: View {
         let index = SessionAnalytics.index(ledgers: ledgers)
 
         VStack(spacing: 0) {
-            Picker("Chronicle section", selection: $selection) {
-                Text("Chronicle").tag(0)
-                Text("Achievements").tag(1)
+            if AppFeatures.achievementsGallery {
+                Picker("Chronicle section", selection: $selection) {
+                    Text("Chronicle").tag(0)
+                    Text("Achievements").tag(1)
+                }
+                .pickerStyle(.segmented)
+                .padding(.horizontal, 16)
+                .padding(.vertical, 10)
             }
-            .pickerStyle(.segmented)
-            .padding(.horizontal, 16)
-            .padding(.vertical, 10)
 
-            if selection == 0 {
+            if selection == 0 || !AppFeatures.achievementsGallery {
                 ChronicleListView(
                     skills: skills,
                     index: index,
@@ -37,7 +39,7 @@ struct ChronicleRootView: View {
                 )
             }
         }
-        .navigationTitle("Chronicle")
+        .navigationTitle(AppFeatures.achievementsGallery ? "Chronicle" : "Milestones")
         .animation(
             SkillingTimeMotion.animation(
                 SkillingTimeMotion.responsive,

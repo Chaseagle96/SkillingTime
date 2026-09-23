@@ -6,6 +6,8 @@ struct SkillbookView: View {
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @Environment(\.dynamicTypeSize) private var dynamicTypeSize
     @EnvironmentObject private var sessionController: SessionController
+    @EnvironmentObject private var presenter: ActiveSessionPresenter
+    @Query private var dayLedgers: [ActivityDayLedger]
     @AppStorage(SkillbookLayout.storageKey) private var preferredColumnCount = SkillbookLayout.defaultColumnCount
     @Query(sort: \LifeSkill.sortOrder) private var allSkills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
@@ -57,6 +59,11 @@ struct SkillbookView: View {
                     lifetimeTotalLevel: lifetimeTotalLevel
                 )
                 .skillingTimeReveal(order: 0)
+
+                if !AppFeatures.todayTab {
+                    todayCard
+                        .skillingTimeReveal(order: 0)
+                }
 
                 if activeSkills.isEmpty {
                     EmptyStateCard(
@@ -224,6 +231,79 @@ struct SkillbookView: View {
             Label("Retire Skill", systemImage: "archivebox")
         }
         .disabled(sessionController.activeSession?.skillID == skill.id)
+    }
+
+    /// Today at a glance plus a single nudge: the practiced Skill closest to its
+    /// next level. Replaces the separate Today tab in the simplified app.
+    private var todayCard: some View {
+        let snapshot = WidgetSnapshotPublisher.make(
+            skills: allSkills,
+            ledgers: ledgers,
+            days: dayLedgers,
+            now: .now,
+            calendar: .current
+        )
+        let nudge = snapshot.closestToLevel
+        let nudgeSkill = nudge.flatMap { summary in activeSkills.first { $0.id == summary.id } }
+
+        return VStack(alignment: .leading, spacing: 12) {
+            HStack(alignment: .firstTextBaseline) {
+                Label("Today", systemImage: "sun.max.fill")
+                    .font(.caption.weight(.bold))
+                    .foregroundStyle(SkillingTimeTheme.gold)
+                Spacer()
+                Text("\(DurationText.compact(snapshot.todaySeconds)) · \(snapshot.todayXP.formatted()) XP")
+                    .font(.subheadline.weight(.semibold))
+                    .contentTransition(.numericText())
+            }
+
+            if let nudge, let nudgeSkill, let seconds = nudge.secondsToNextLevel {
+                HStack(spacing: 12) {
+                    SkillGlyph(
+                        symbolName: nudgeSkill.symbolName,
+                        color: Color(hex: nudgeSkill.accentHex),
+                        size: 38,
+                        rank: ProgressionEngine.rank(for: nudge.level)
+                    )
+                    VStack(alignment: .leading, spacing: 2) {
+                        Text(nudgeSkill.name)
+                            .font(.headline)
+                            .lineLimit(1)
+                        Text("\(DurationText.compact(seconds)) to Level \(nudge.level + 1)")
+                            .font(.caption)
+                            .foregroundStyle(.secondary)
+                    }
+                    Spacer(minLength: 0)
+                    if sessionController.activeSession == nil {
+                        Button {
+                            startNudge(nudgeSkill)
+                        } label: {
+                            Label("Start", systemImage: "play.fill")
+                                .font(.subheadline.weight(.semibold))
+                        }
+                        .buttonStyle(.borderedProminent)
+                        .tint(Color(hex: nudgeSkill.accentHex))
+                        .accessibilityLabel("Start \(nudgeSkill.name)")
+                    }
+                }
+                .accessibilityElement(children: .contain)
+            } else {
+                Text("Start any Skill below. Every minute counts toward its next level.")
+                    .font(.caption)
+                    .foregroundStyle(.secondary)
+            }
+        }
+        .padding(16)
+        .background(
+            Color.white.opacity(0.045),
+            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
+        )
+    }
+
+    private func startNudge(_ skill: LifeSkill) {
+        guard sessionController.start(skillID: skill.id, focusGoal: nil) else { return }
+        Haptics.sessionStart()
+        presenter.present(skillID: skill.id)
     }
 
     private func characterHeader(

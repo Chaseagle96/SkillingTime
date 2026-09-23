@@ -31,7 +31,7 @@ struct RootTabView: View {
     private var questAssignments: [QuestAssignment]
 
     @StateObject private var presenter = ActiveSessionPresenter()
-    @State private var selectedTab = 0
+    @State private var selectedTab = AppFeatures.todayTab ? 0 : 1
     @State private var persistenceError: String?
     @State private var ambientSyncTask: Task<Void, Never>?
 
@@ -46,7 +46,8 @@ struct RootTabView: View {
     }
 
     private var activeQuestAssignment: QuestAssignment? {
-        guard let skillID = sessionController.activeSession?.skillID else { return nil }
+        guard AppFeatures.quests,
+              let skillID = sessionController.activeSession?.skillID else { return nil }
         return questAssignments
             .filter {
                 QuestEngine.isCurrent($0)
@@ -203,11 +204,13 @@ struct RootTabView: View {
 
     private var tabView: some View {
         TabView(selection: $selectedTab) {
-            NavigationStack {
-                TodayView()
+            if AppFeatures.todayTab {
+                NavigationStack {
+                    TodayView()
+                }
+                .tabItem { Label("Today", systemImage: "sun.max.fill") }
+                .tag(0)
             }
-            .tabItem { Label("Today", systemImage: "sun.max.fill") }
-            .tag(0)
 
             NavigationStack {
                 SkillbookView()
@@ -215,16 +218,24 @@ struct RootTabView: View {
             .tabItem { Label("Skills", systemImage: "square.grid.2x2.fill") }
             .tag(1)
 
-            NavigationStack {
-                ChronicleRootView()
+            if AppFeatures.todayTab {
+                NavigationStack {
+                    ChronicleRootView()
+                }
+                .tabItem { Label("Chronicle", systemImage: "scroll.fill") }
+                .tag(2)
             }
-            .tabItem { Label("Chronicle", systemImage: "scroll.fill") }
-            .tag(2)
 
+            // In the simplified app, Chronicle milestones live inside "You".
             NavigationStack {
                 CharacterView()
             }
-            .tabItem { Label("Character", systemImage: "person.crop.circle.fill") }
+            .tabItem {
+                Label(
+                    AppFeatures.todayTab ? "Character" : "You",
+                    systemImage: "person.crop.circle.fill"
+                )
+            }
             .tag(3)
         }
         .tint(SkillingTimeTheme.gold)

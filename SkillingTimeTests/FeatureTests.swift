@@ -231,3 +231,44 @@ final class SkillbookLayoutTests: XCTestCase {
         XCTAssertEqual(SkillCardDensity(columnCount: 4), .dense)
     }
 }
+
+final class SimplifiedExperienceTests: XCTestCase {
+    func testSummaryShowsOnlyVisibleSystems() {
+        let start = ProgressionEngine.progress(forTotalXP: 0, curveVersion: 1)
+        let end = ProgressionEngine.progress(forTotalXP: 500, curveVersion: 1)
+        let outcome = SessionOutcome(
+            id: UUID(),
+            skillID: UUID(),
+            skillName: "Cooking",
+            symbolName: "frying.pan.fill",
+            accentHex: "D97A43",
+            durationSeconds: 1_500,
+            xpEarned: 500,
+            startingProgress: start,
+            endingProgress: end,
+            levelsCrossed: [2, 3, 4],
+            chroniclesUnlocked: [],
+            achievementsUnlocked: Array(AchievementEngine.skillDefinitions.prefix(2)),
+            questsCompleted: [],
+            personalRecords: [],
+            pathProgress: nil,
+            characterTitlesUnlocked: [],
+            expertChallengesCompleted: [],
+            capabilitiesUnlocked: [.focusGoals, .legacy],
+            focusGoalResult: nil,
+            note: "Soup",
+            wasAlreadyCommitted: false
+        )
+
+        let visible = AppFeatures.visibleOutcome(outcome)
+
+        XCTAssertEqual(visible.levelsCrossed, [2, 3, 4], "The core loop is always shown.")
+        XCTAssertEqual(visible.xpEarned, 500)
+        XCTAssertEqual(visible.note, "Soup")
+        XCTAssertEqual(visible.achievementsUnlocked.isEmpty, !AppFeatures.achievementsGallery)
+        XCTAssertEqual(
+            visible.capabilitiesUnlocked,
+            [SkillCapability.focusGoals, .legacy].filter(AppFeatures.isVisible)
+        )
+    }
+}

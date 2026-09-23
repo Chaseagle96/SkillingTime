@@ -83,21 +83,25 @@ struct SkillDetailView: View {
     private var accent: Color { Color(hex: skill.accentHex) }
 
     private var hasFocusGoals: Bool {
-        progress.level >= 25 || chronicleUnlocks.contains { $0.milestoneLevel == 25 }
+        AppFeatures.focusGoals
+            && (progress.level >= 25 || chronicleUnlocks.contains { $0.milestoneLevel == 25 })
     }
 
     private var specialization: SkillSpecialization? { specializations.first }
 
     private var hasSpecializationCapability: Bool {
-        progress.level >= 50 || chronicleUnlocks.contains { $0.milestoneLevel == 50 }
+        AppFeatures.lateGameCapabilities
+            && (progress.level >= 50 || chronicleUnlocks.contains { $0.milestoneLevel == 50 })
     }
 
     private var hasExpertChallengeCapability: Bool {
-        progress.level >= 75 || chronicleUnlocks.contains { $0.milestoneLevel == 75 }
+        AppFeatures.lateGameCapabilities
+            && (progress.level >= 75 || chronicleUnlocks.contains { $0.milestoneLevel == 75 })
     }
 
     private var hasLegacyCapability: Bool {
-        progress.level >= 100 || chronicleUnlocks.contains { $0.milestoneLevel == 100 }
+        AppFeatures.lateGameCapabilities
+            && (progress.level >= 100 || chronicleUnlocks.contains { $0.milestoneLevel == 100 })
     }
 
     private var activeExpertChallenge: ExpertChallenge? {

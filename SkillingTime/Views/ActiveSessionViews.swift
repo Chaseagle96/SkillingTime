@@ -623,6 +623,19 @@ struct SessionSummaryView: View {
     var oneMoreLevel: OneMoreLevelOffer? = nil
     var keepGoing: (() -> Void)? = nil
 
+    init(
+        outcome: SessionOutcome,
+        done: @escaping () -> Void,
+        oneMoreLevel: OneMoreLevelOffer? = nil,
+        keepGoing: (() -> Void)? = nil
+    ) {
+        // Hidden systems still record results; the summary shows only visible ones.
+        self.outcome = AppFeatures.visibleOutcome(outcome)
+        self.done = done
+        self.oneMoreLevel = oneMoreLevel
+        self.keepGoing = keepGoing
+    }
+
     @State private var revealStarted = false
 
     private var accent: Color { Color(hex: outcome.accentHex) }

@@ -34,49 +34,68 @@ struct CharacterView: View {
                 characterSheet(totalLevel: totalLevel)
                     .skillingTimeReveal(order: 0)
 
-                if profile?.pathReviewCompletedAt == nil {
-                    pathReviewCard
-                        .skillingTimeReveal(order: 1)
-                }
+                if AppFeatures.characterPaths {
+                    if profile?.pathReviewCompletedAt == nil {
+                        pathReviewCard
+                            .skillingTimeReveal(order: 1)
+                    }
 
-                pathSection
-                    .skillingTimeReveal(order: 2)
+                    pathSection
+                        .skillingTimeReveal(order: 2)
+                }
                 overviewGrid(
                     index: index,
                     totalLevel: totalLevel,
                     artifactCount: artifacts.count
                 )
                 .skillingTimeReveal(order: 3)
-                masterySection
-                    .skillingTimeReveal(order: 4)
-                titleSection
-                    .skillingTimeReveal(order: 5)
+                if AppFeatures.lateGameCapabilities {
+                    masterySection
+                        .skillingTimeReveal(order: 4)
+                }
+                if AppFeatures.characterPaths {
+                    titleSection
+                        .skillingTimeReveal(order: 5)
+                }
                 artifactSection(artifacts: artifacts)
                     .skillingTimeReveal(order: 6)
+                if !AppFeatures.todayTab {
+                    milestonesLink
+                        .skillingTimeReveal(order: 6)
+                }
                 strongestSkills(rankedSkills)
                     .skillingTimeReveal(order: 7)
             }
             .padding(16)
             .padding(.bottom, 110)
         }
-        .navigationTitle("Character")
+        .navigationTitle(AppFeatures.todayTab ? "Character" : "You")
         .toolbar {
             ToolbarItem(placement: .topBarTrailing) {
-                Menu {
+                if AppFeatures.characterPaths {
+                    Menu {
+                        Button {
+                            showingSettings = true
+                        } label: {
+                            Label("Character Settings", systemImage: "gearshape.fill")
+                        }
+                        Button {
+                            showingPathReview = true
+                        } label: {
+                            Label("Review Skill Paths", systemImage: "point.3.connected.trianglepath.dotted")
+                        }
+                    } label: {
+                        Image(systemName: "ellipsis.circle")
+                    }
+                    .accessibilityLabel("Character options")
+                } else {
                     Button {
                         showingSettings = true
                     } label: {
-                        Label("Character Settings", systemImage: "gearshape.fill")
+                        Image(systemName: "gearshape")
                     }
-                    Button {
-                        showingPathReview = true
-                    } label: {
-                        Label("Review Skill Paths", systemImage: "point.3.connected.trianglepath.dotted")
-                    }
-                } label: {
-                    Image(systemName: "ellipsis.circle")
+                    .accessibilityLabel("Settings")
                 }
-                .accessibilityLabel("Character options")
             }
         }
         .sheet(isPresented: $showingSettings) {
@@ -92,7 +111,9 @@ struct CharacterView: View {
         let equippedTitle = profile?.equippedTitleID.flatMap { identifier in
             titleUnlocks.first { $0.id == identifier }
         }
-        let signature = CharacterProgressionEngine.buildSignature(ledgers: pathLedgers)
+        let signature = AppFeatures.characterPaths
+            ? CharacterProgressionEngine.buildSignature(ledgers: pathLedgers)
+            : "Level Up Real Life"
         let accent = Color(hex: profile?.accentHex ?? "D2A84A")
 
         return ParchmentCard {
@@ -126,6 +147,36 @@ struct CharacterView: View {
             .frame(maxWidth: .infinity)
         }
         .accessibilityElement(children: .combine)
+    }
+
+    private var milestonesLink: some View {
+        NavigationLink {
+            ChronicleRootView()
+        } label: {
+            HStack(spacing: 13) {
+                Image(systemName: "scroll.fill")
+                    .font(.title2)
+                    .foregroundStyle(SkillingTimeTheme.gold)
+                    .frame(width: 42)
+                VStack(alignment: .leading, spacing: 3) {
+                    Text("Milestone Chapters")
+                        .font(.headline)
+                    Text("Every Skill's story at Levels 25, 50, 75, and 100.")
+                        .font(.caption)
+                        .foregroundStyle(.secondary)
+                }
+                Spacer()
+                Image(systemName: "chevron.right")
+                    .font(.caption.bold())
+                    .foregroundStyle(.tertiary)
+            }
+            .padding(15)
+            .background(
+                Color.white.opacity(0.045),
+                in: RoundedRectangle(cornerRadius: 18, style: .continuous)
+            )
+        }
+        .buttonStyle(.plain)
     }
 
     private var pathReviewCard: some View {
@@ -211,23 +262,35 @@ struct CharacterView: View {
                 value: DurationText.compact(index.totalSeconds),
                 systemImage: "hourglass"
             )
+            if AppFeatures.achievementsGallery {
+                MetricCard(
+                    title: "Achievements",
+                    value: achievementUnlocks.count.formatted(),
+                    systemImage: "trophy.fill"
+                )
+            } else {
+                MetricCard(
+                    title: "Sessions",
+                    value: index.sessionCount.formatted(),
+                    systemImage: "checkmark.seal"
+                )
+            }
+            if AppFeatures.characterPaths {
+                MetricCard(
+                    title: "Character Titles",
+                    value: titleUnlocks.count.formatted(),
+                    systemImage: "signature"
+                )
+            }
+            if AppFeatures.lateGameCapabilities {
+                MetricCard(
+                    title: "Expert Challenges",
+                    value: expertChallenges.filter(\.isComplete).count.formatted(),
+                    systemImage: "checkmark.seal.fill"
+                )
+            }
             MetricCard(
-                title: "Achievements",
-                value: achievementUnlocks.count.formatted(),
-                systemImage: "trophy.fill"
-            )
-            MetricCard(
-                title: "Character Titles",
-                value: titleUnlocks.count.formatted(),
-                systemImage: "signature"
-            )
-            MetricCard(
-                title: "Expert Challenges",
-                value: expertChallenges.filter(\.isComplete).count.formatted(),
-                systemImage: "checkmark.seal.fill"
-            )
-            MetricCard(
-                title: "Artifacts",
+                title: AppFeatures.todayTab ? "Artifacts" : "Milestones",
                 value: artifactCount.formatted(),
                 systemImage: "seal.fill"
             )
@@ -567,10 +630,12 @@ private struct CharacterSettingsView: View {
                 Section("Identity") {
                     TextField("Character name", text: $displayName)
                         .textInputAutocapitalization(.words)
-                    Picker("Equipped Title", selection: $equippedTitleID) {
-                        Text("Build Signature").tag("")
-                        ForEach(titles) { title in
-                            Text(title.title).tag(title.id)
+                    if AppFeatures.characterPaths {
+                        Picker("Equipped Title", selection: $equippedTitleID) {
+                            Text("Build Signature").tag("")
+                            ForEach(titles) { title in
+                                Text(title.title).tag(title.id)
+                            }
                         }
                     }
                 }

@@ -60,6 +60,7 @@
 		31000000000000000000000A /* SkillingTimeHomeWidgets.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000006 /* SkillingTimeHomeWidgets.swift */; };
 		31000000000000000000000B /* StartSkillControl.swift in Sources */ = {isa = PBXBuildFile; fileRef = 210000000000000000000007 /* StartSkillControl.swift */; };
 		330000000000000000000001 /* FeatureTests.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000002E /* FeatureTests.swift */; };
+		300000000000000000000029 /* AppFeatures.swift in Sources */ = {isa = PBXBuildFile; fileRef = 20000000000000000000002F /* AppFeatures.swift */; };
 /* End PBXBuildFile section */
 
 /* Begin PBXContainerItemProxy section */
@@ -148,6 +149,7 @@
 		210000000000000000000006 /* SkillingTimeHomeWidgets.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = SkillingTimeHomeWidgets.swift; sourceTree = "<group>"; };
 		210000000000000000000007 /* StartSkillControl.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = StartSkillControl.swift; sourceTree = "<group>"; };
 		20000000000000000000002E /* FeatureTests.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = FeatureTests.swift; sourceTree = "<group>"; };
+		20000000000000000000002F /* AppFeatures.swift */ = {isa = PBXFileReference; lastKnownFileType = sourcecode.swift; path = AppFeatures.swift; sourceTree = "<group>"; };
 /* End PBXFileReference section */
 
 /* Begin PBXFrameworksBuildPhase section */
@@ -242,6 +244,7 @@
 				20000000000000000000002A /* PracticeInsights.swift */,
 				20000000000000000000002B /* BackupService.swift */,
 				20000000000000000000002C /* SkillingTimeShortcuts.swift */,
+				20000000000000000000002F /* AppFeatures.swift */,
 			);
 			path = Engine;
 			sourceTree = "<group>";
@@ -477,6 +480,7 @@
 				300000000000000000000026 /* BackupService.swift in Sources */,
 				300000000000000000000027 /* SkillingTimeShortcuts.swift in Sources */,
 				300000000000000000000028 /* PracticeInsightsViews.swift in Sources */,
+				300000000000000000000029 /* AppFeatures.swift in Sources */,
 			);
 			runOnlyForDeploymentPostprocessing = 0;
 		};
@@ -644,7 +648,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = SkillingTime/SkillingTime.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -671,7 +675,7 @@
 				ASSETCATALOG_COMPILER_GLOBAL_ACCENT_COLOR_NAME = AccentColor;
 				CODE_SIGN_ENTITLEMENTS = SkillingTime/SkillingTime.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				DEVELOPMENT_ASSET_PATHS = "";
 				ENABLE_PREVIEWS = YES;
 				GENERATE_INFOPLIST_FILE = NO;
@@ -696,7 +700,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.6.0;
@@ -715,7 +719,7 @@
 			buildSettings = {
 				BUNDLE_LOADER = "$(TEST_HOST)";
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				GENERATE_INFOPLIST_FILE = YES;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
 				MARKETING_VERSION = 0.6.0;
@@ -735,7 +739,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = SkillingTimeWidgets/SkillingTimeWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SkillingTimeWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
@@ -761,7 +765,7 @@
 				APPLICATION_EXTENSION_API_ONLY = YES;
 				CODE_SIGN_ENTITLEMENTS = SkillingTimeWidgets/SkillingTimeWidgets.entitlements;
 				CODE_SIGN_STYLE = Automatic;
-				CURRENT_PROJECT_VERSION = 9;
+				CURRENT_PROJECT_VERSION = 10;
 				GENERATE_INFOPLIST_FILE = NO;
 				INFOPLIST_FILE = SkillingTimeWidgets/Info.plist;
 				IPHONEOS_DEPLOYMENT_TARGET = 17.0;
