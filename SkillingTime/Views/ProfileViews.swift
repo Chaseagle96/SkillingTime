@@ -199,7 +199,7 @@ struct SkillbookHeroCards: View {
         .frame(width: 138, height: 92, alignment: .topLeading)
         .padding(12)
         .background(
-            Color.white.opacity(0.05),
+            Color.primary.opacity(0.05),
             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
         .accessibilityElement(children: .combine)
@@ -243,7 +243,7 @@ private struct WeekBars: View {
         HStack(alignment: .bottom, spacing: 3) {
             ForEach(Array(values.enumerated()), id: \.offset) { index, seconds in
                 RoundedRectangle(cornerRadius: 2)
-                    .fill(index == values.count - 1 ? SkillingTimeTheme.gold : Color.white.opacity(0.3))
+                    .fill(index == values.count - 1 ? SkillingTimeTheme.gold : Color.primary.opacity(0.3))
                     .frame(width: 8, height: max(3, 18 * CGFloat(seconds) / CGFloat(peak)))
             }
         }
@@ -260,6 +260,8 @@ struct SettingsView: View {
     @Environment(\.openURL) private var openURL
     @EnvironmentObject private var notificationManager: ProgressionNotificationManager
     @AppStorage(SkillbookLayout.storageKey) private var columnCount = SkillbookLayout.defaultColumnCount
+    @AppStorage(SkillbookLayout.showStatsKey) private var showStats = true
+    @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.defaultValue.rawValue
     @Query private var profiles: [CharacterProfile]
 
     @State private var displayName = "The Practitioner"
@@ -333,6 +335,19 @@ struct SettingsView: View {
                 }
 
                 Section {
+                    Picker("Theme", selection: $appearanceRawValue) {
+                        ForEach(AppAppearance.allCases) { option in
+                            Text(option.label).tag(option.rawValue)
+                        }
+                    }
+                } header: {
+                    Text("Appearance")
+                } footer: {
+                    Text("Black uses pure black backgrounds, which saves power on OLED screens. Applies immediately.")
+                }
+
+                Section {
+                    Toggle("Show Stats", isOn: $showStats)
                     Picker("Skill Layout", selection: $columnCount) {
                         ForEach(SkillbookLayout.columnOptions, id: \.self) { count in
                             Text(SkillbookLayout.label(for: count)).tag(count)
@@ -341,7 +356,7 @@ struct SettingsView: View {
                 } header: {
                     Text("Skills")
                 } footer: {
-                    Text("You can also pinch the Skill grid: pinch out for larger cards, down to a list, and pinch in for more, up to four columns.")
+                    Text("Show Stats controls the swipeable cards above your Skills. You can also pinch the Skill grid: pinch out for larger cards, down to a list, and pinch in for more, up to four columns.")
                 }
 
                 Section {

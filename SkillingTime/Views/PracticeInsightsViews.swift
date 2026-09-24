@@ -78,7 +78,7 @@ struct SkillPaceSection: View {
         }
         .padding(14)
         .background(
-            Color.white.opacity(0.055),
+            Color.primary.opacity(0.055),
             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
         .accessibilityElement(children: .combine)

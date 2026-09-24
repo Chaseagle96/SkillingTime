@@ -9,6 +9,7 @@ struct SkillbookView: View {
     @EnvironmentObject private var presenter: ActiveSessionPresenter
     @Query private var dayLedgers: [ActivityDayLedger]
     @AppStorage(SkillbookLayout.storageKey) private var preferredColumnCount = SkillbookLayout.defaultColumnCount
+    @AppStorage(SkillbookLayout.showStatsKey) private var showStats = true
     @Query(sort: \LifeSkill.sortOrder) private var allSkills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
 
@@ -61,16 +62,19 @@ struct SkillbookView: View {
 
         ScrollView {
             VStack(spacing: 16) {
-                SkillbookHeroCards(
-                    lifetimeLevel: lifetimeTotalLevel,
-                    snapshot: snapshot,
-                    totalSeconds: sessionIndex.totalSeconds,
-                    sessionCount: sessionIndex.sessionCount,
-                    activeSkillCount: activeSkills.count,
-                    canStart: sessionController.activeSession == nil,
-                    startSkill: startSkill
-                )
-                .skillingTimeReveal(order: 0)
+                if showStats {
+                    SkillbookHeroCards(
+                        lifetimeLevel: lifetimeTotalLevel,
+                        snapshot: snapshot,
+                        totalSeconds: sessionIndex.totalSeconds,
+                        sessionCount: sessionIndex.sessionCount,
+                        activeSkillCount: activeSkills.count,
+                        canStart: sessionController.activeSession == nil,
+                        startSkill: startSkill
+                    )
+                    .skillingTimeReveal(order: 0)
+                    .transition(.opacity.combined(with: .move(edge: .top)))
+                }
 
                 if activeSkills.isEmpty {
                     EmptyStateCard(
@@ -338,6 +342,7 @@ enum SkillbookLayout {
     static let storageKey = "skillbook.grid-columns"
     static let defaultColumnCount = 2
     static let columnOptions = [1, 2, 3, 4]
+    static let showStatsKey = "skillbook.show-stats"
     /// Pinch scale that counts as a deliberate pinch out (fewer columns) or in.
     static let pinchOutThreshold: CGFloat = 1.2
     static let pinchInThreshold: CGFloat = 0.83
@@ -405,7 +410,7 @@ private struct SkillCard: View {
         }
         .background(
             LinearGradient(
-                colors: [Color.white.opacity(0.065), accent.opacity(0.045)],
+                colors: [Color.primary.opacity(0.065), accent.opacity(0.045)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),

@@ -50,7 +50,7 @@ struct SkillProgressBar: View {
         GeometryReader { proxy in
             ZStack(alignment: .leading) {
                 Capsule()
-                    .fill(Color.white.opacity(0.09))
+                    .fill(Color.primary.opacity(0.09))
                 Capsule()
                     .fill(
                         LinearGradient(
@@ -106,7 +106,7 @@ struct MetricCard: View {
         }
         .frame(maxWidth: .infinity, alignment: .leading)
         .padding(14)
-        .background(Color.white.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
+        .background(Color.primary.opacity(0.055), in: RoundedRectangle(cornerRadius: 18, style: .continuous))
         .animation(
             SkillingTimeMotion.animation(
                 SkillingTimeMotion.quick,
@@ -156,7 +156,7 @@ struct EmptyStateCard: View {
         }
         .frame(maxWidth: .infinity)
         .padding(28)
-        .background(Color.white.opacity(0.045), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
+        .background(Color.primary.opacity(0.045), in: RoundedRectangle(cornerRadius: 22, style: .continuous))
         .accessibilityElement(children: .combine)
     }
 }
@@ -194,16 +194,39 @@ struct ParchmentCard<Content: View>: View {
     }
 }
 
-extension View {
-    func skillingTimeScreenBackground() -> some View {
-        background(
+/// The screen backdrop: the navy gradient in Dark, a warm off-white in Light,
+/// and pure black in Black (OLED) mode.
+private struct SkillingTimeScreenBackground: ViewModifier {
+    @Environment(\.skillingTimeAppearance) private var appearance
+    @Environment(\.colorScheme) private var colorScheme
+
+    func body(content: Content) -> some View {
+        content.background(backdrop.ignoresSafeArea())
+    }
+
+    @ViewBuilder
+    private var backdrop: some View {
+        if appearance == .black {
+            Color.black
+        } else if colorScheme == .light {
+            LinearGradient(
+                colors: [Color(hex: "F7F4EE"), Color(hex: "EDEFF3")],
+                startPoint: .top,
+                endPoint: .bottom
+            )
+        } else {
             LinearGradient(
                 colors: [SkillingTimeTheme.background, Color(hex: "111824")],
                 startPoint: .top,
                 endPoint: .bottom
             )
-            .ignoresSafeArea()
-        )
+        }
+    }
+}
+
+extension View {
+    func skillingTimeScreenBackground() -> some View {
+        modifier(SkillingTimeScreenBackground())
     }
 }
 

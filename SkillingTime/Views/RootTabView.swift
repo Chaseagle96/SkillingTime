@@ -162,7 +162,6 @@ struct RootTabView: View {
             Text(persistenceError ?? "The requested change could not be completed.")
         }
         .environmentObject(presenter)
-        .preferredColorScheme(.dark)
     }
 
     @ViewBuilder
@@ -426,7 +425,7 @@ private struct MiniSessionBar: View {
                 .overlay {
                     if usesOwnBackground {
                         RoundedRectangle(cornerRadius: 20, style: .continuous)
-                            .strokeBorder(Color.white.opacity(0.12), lineWidth: 1)
+                            .strokeBorder(Color.primary.opacity(0.12), lineWidth: 1)
                     }
                 }
                 .shadow(

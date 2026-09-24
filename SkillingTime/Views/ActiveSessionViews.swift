@@ -292,7 +292,7 @@ struct ActiveSessionView: View {
         }
         .padding(18)
         .background(
-            Color.white.opacity(0.05),
+            Color.primary.opacity(0.05),
             in: RoundedRectangle(cornerRadius: 22, style: .continuous)
         )
     }
@@ -792,7 +792,7 @@ struct SessionSummaryView: View {
                 }
                 .padding(14)
                 .background(
-                    Color.white.opacity(0.045),
+                    Color.primary.opacity(0.045),
                     in: RoundedRectangle(cornerRadius: 16, style: .continuous)
                 )
             }

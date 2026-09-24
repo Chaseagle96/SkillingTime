@@ -150,7 +150,7 @@ private struct ChronicleSkillRow: View {
         }
         .padding(14)
         .background(
-            Color.white.opacity(0.045),
+            Color.primary.opacity(0.045),
             in: RoundedRectangle(cornerRadius: 20, style: .continuous)
         )
         .accessibilityElement(children: .combine)
@@ -193,7 +193,7 @@ private struct SkillChronicleView: View {
                 }
                 .padding(16)
                 .background(
-                    Color.white.opacity(0.045),
+                    Color.primary.opacity(0.045),
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
                 .skillingTimeReveal(order: 0)
@@ -263,13 +263,13 @@ private struct ChronicleChapterCard: View {
                 .frame(maxWidth: .infinity)
                 .padding(24)
                 .background(
-                    Color.white.opacity(0.035),
+                    Color.primary.opacity(0.035),
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
                 .overlay {
                     RoundedRectangle(cornerRadius: 20, style: .continuous)
                         .strokeBorder(
-                            Color.white.opacity(0.07),
+                            Color.primary.opacity(0.07),
                             style: StrokeStyle(lineWidth: 1, dash: [5, 5])
                         )
                 }
@@ -330,7 +330,7 @@ private struct AchievementGalleryView: View {
                 }
                 .padding(16)
                 .background(
-                    Color.white.opacity(0.045),
+                    Color.primary.opacity(0.045),
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
                 .skillingTimeReveal(order: 0)
@@ -412,7 +412,7 @@ private struct AchievementRow: View {
         }
         .padding(13)
         .background(
-            Color.white.opacity(isEarned ? 0.055 : 0.03),
+            Color.primary.opacity(isEarned ? 0.055 : 0.03),
             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
         .accessibilityElement(children: .combine)

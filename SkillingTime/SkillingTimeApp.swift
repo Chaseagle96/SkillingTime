@@ -6,6 +6,11 @@ struct SkillingTimeApp: App {
     @StateObject private var sessionController = SessionController()
     @StateObject private var liveActivityCoordinator = LiveActivityCoordinator()
     @StateObject private var notificationManager = ProgressionNotificationManager()
+    @AppStorage(AppAppearance.storageKey) private var appearanceRawValue = AppAppearance.defaultValue.rawValue
+
+    private var appearance: AppAppearance {
+        AppAppearance(rawValue: appearanceRawValue) ?? .defaultValue
+    }
 
     /// Opening the store can fail (for example after an interrupted migration).
     /// Instead of crashing on every launch, a failure shows a recovery screen that
@@ -45,6 +50,10 @@ struct SkillingTimeApp: App {
                 .environmentObject(liveActivityCoordinator)
                 .environmentObject(notificationManager)
                 .modelContainer(container)
+                // Read once at the root so the launch screen, every screen, and
+                // every sheet follow the chosen appearance.
+                .environment(\.skillingTimeAppearance, appearance)
+                .preferredColorScheme(appearance.colorScheme)
             case .failure(let error):
                 StorageRecoveryView(errorDescription: String(describing: error))
             }

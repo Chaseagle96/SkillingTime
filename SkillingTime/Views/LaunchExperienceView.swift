@@ -1,6 +1,7 @@
 import SwiftUI
 
 struct LaunchExperienceContainer<Content: View>: View {
+    @Environment(\.skillingTimeAppearance) private var appearance
     @Environment(\.accessibilityReduceMotion) private var reduceMotion
     @AppStorage("skillingTime.awakeningLaunchPlayed.v1") private var hasPlayed = false
 
@@ -35,7 +36,7 @@ struct LaunchExperienceContainer<Content: View>: View {
                 .zIndex(1)
             }
         }
-        .background(SkillingTimeTheme.background.ignoresSafeArea())
+        .background(SkillingTimeTheme.splashBackground(for: appearance).ignoresSafeArea())
         .task {
             await playLaunchExperience()
         }
@@ -84,20 +85,21 @@ struct LaunchExperienceContainer<Content: View>: View {
 }
 
 private struct LaunchExperienceView: View {
+    @Environment(\.skillingTimeAppearance) private var appearance
     let markAwake: Bool
     let wordmarkVisible: Bool
     let usesSpatialMotion: Bool
 
     var body: some View {
         ZStack {
-            SkillingTimeTheme.background
+            SkillingTimeTheme.splashBackground(for: appearance)
                 .ignoresSafeArea()
 
             RadialGradient(
                 colors: [
                     SkillingTimeTheme.gold.opacity(markAwake ? 0.13 : 0),
                     Color(hex: "162033").opacity(markAwake ? 0.58 : 0),
-                    SkillingTimeTheme.background
+                    SkillingTimeTheme.splashBackground(for: appearance)
                 ],
                 center: .center,
                 startRadius: 0,

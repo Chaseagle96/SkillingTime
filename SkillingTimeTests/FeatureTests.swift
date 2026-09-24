@@ -1,5 +1,6 @@
 import SwiftData
 import XCTest
+import SwiftUI
 @testable import SkillingTime
 
 final class BackupServiceTests: XCTestCase {
@@ -240,5 +241,17 @@ final class SkillbookLayoutTests: XCTestCase {
         XCTAssertEqual(SkillbookLayout.stepped(from: 4, by: 1), 4, "Stops at four columns.")
         XCTAssertGreaterThan(SkillbookLayout.pinchOutThreshold, 1)
         XCTAssertLessThan(SkillbookLayout.pinchInThreshold, 1)
+    }
+}
+
+final class AppearanceTests: XCTestCase {
+    func testEachAppearanceMapsToTheRightColorScheme() {
+        XCTAssertEqual(AppAppearance.dark.colorScheme, .dark)
+        XCTAssertEqual(AppAppearance.black.colorScheme, .dark, "OLED black is a dark scheme with black backgrounds.")
+        XCTAssertEqual(AppAppearance.light.colorScheme, .light)
+        XCTAssertNil(AppAppearance.system.colorScheme)
+        XCTAssertEqual(AppAppearance.defaultValue, .dark, "Existing users keep today's look.")
+        XCTAssertEqual(SkillingTimeTheme.splashBackground(for: .black), .black)
+        XCTAssertEqual(Set(AppAppearance.allCases.map(\.rawValue)).count, AppAppearance.allCases.count)
     }
 }

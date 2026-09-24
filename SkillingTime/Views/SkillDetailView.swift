@@ -181,7 +181,7 @@ struct SkillDetailView: View {
         .padding(22)
         .background(
             LinearGradient(
-                colors: [accent.opacity(0.12), Color.white.opacity(0.035)],
+                colors: [accent.opacity(0.12), Color.primary.opacity(0.035)],
                 startPoint: .topLeading,
                 endPoint: .bottomTrailing
             ),
@@ -207,7 +207,7 @@ struct SkillDetailView: View {
         .padding(16)
         .frame(maxWidth: .infinity, alignment: .leading)
         .background(
-            Color.white.opacity(0.04),
+            Color.primary.opacity(0.04),
             in: RoundedRectangle(cornerRadius: 18, style: .continuous)
         )
     }
@@ -321,7 +321,7 @@ struct SkillDetailView: View {
                 }
                 .padding(.horizontal, 14)
                 .background(
-                    Color.white.opacity(0.045),
+                    Color.primary.opacity(0.045),
                     in: RoundedRectangle(cornerRadius: 20, style: .continuous)
                 )
             }
