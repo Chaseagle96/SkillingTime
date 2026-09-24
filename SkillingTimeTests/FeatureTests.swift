@@ -20,7 +20,6 @@ final class BackupServiceTests: XCTestCase {
                     startedAt: end.addingTimeInterval(-Double(seconds)),
                     endedAt: end,
                     activeSeconds: seconds,
-                    focusGoal: nil,
                     shouldResumeOnCancel: false
                 ),
                 countedSeconds: seconds,
@@ -220,55 +219,26 @@ final class PracticeInsightsTests: XCTestCase {
 }
 
 final class SkillbookLayoutTests: XCTestCase {
-    func testColumnPreferenceIsClampedAndLargeTextUsesTwo() {
+    func testColumnPreferenceIsClampedAndLargeTextCapsAtTwo() {
+        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 1, isAccessibilitySize: false), 1)
         XCTAssertEqual(SkillbookLayout.columnCount(preferred: 3, isAccessibilitySize: false), 3)
         XCTAssertEqual(SkillbookLayout.columnCount(preferred: 4, isAccessibilitySize: false), 4)
         XCTAssertEqual(SkillbookLayout.columnCount(preferred: 9, isAccessibilitySize: false), 4)
-        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 0, isAccessibilitySize: false), 2)
+        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 0, isAccessibilitySize: false), 1)
         XCTAssertEqual(SkillbookLayout.columnCount(preferred: 4, isAccessibilitySize: true), 2)
+        XCTAssertEqual(SkillbookLayout.columnCount(preferred: 1, isAccessibilitySize: true), 1)
+        XCTAssertEqual(SkillCardDensity(columnCount: 1), .row)
         XCTAssertEqual(SkillCardDensity(columnCount: 2), .regular)
         XCTAssertEqual(SkillCardDensity(columnCount: 3), .compact)
         XCTAssertEqual(SkillCardDensity(columnCount: 4), .dense)
     }
-}
 
-final class SimplifiedExperienceTests: XCTestCase {
-    func testSummaryShowsOnlyVisibleSystems() {
-        let start = ProgressionEngine.progress(forTotalXP: 0, curveVersion: 1)
-        let end = ProgressionEngine.progress(forTotalXP: 500, curveVersion: 1)
-        let outcome = SessionOutcome(
-            id: UUID(),
-            skillID: UUID(),
-            skillName: "Cooking",
-            symbolName: "frying.pan.fill",
-            accentHex: "D97A43",
-            durationSeconds: 1_500,
-            xpEarned: 500,
-            startingProgress: start,
-            endingProgress: end,
-            levelsCrossed: [2, 3, 4],
-            chroniclesUnlocked: [],
-            achievementsUnlocked: Array(AchievementEngine.skillDefinitions.prefix(2)),
-            questsCompleted: [],
-            personalRecords: [],
-            pathProgress: nil,
-            characterTitlesUnlocked: [],
-            expertChallengesCompleted: [],
-            capabilitiesUnlocked: [.focusGoals, .legacy],
-            focusGoalResult: nil,
-            note: "Soup",
-            wasAlreadyCommitted: false
-        )
-
-        let visible = AppFeatures.visibleOutcome(outcome)
-
-        XCTAssertEqual(visible.levelsCrossed, [2, 3, 4], "The core loop is always shown.")
-        XCTAssertEqual(visible.xpEarned, 500)
-        XCTAssertEqual(visible.note, "Soup")
-        XCTAssertEqual(visible.achievementsUnlocked.isEmpty, !AppFeatures.achievementsGallery)
-        XCTAssertEqual(
-            visible.capabilitiesUnlocked,
-            [SkillCapability.focusGoals, .legacy].filter(AppFeatures.isVisible)
-        )
+    func testPinchStepsOneColumnAtATimeWithinOneToFour() {
+        XCTAssertEqual(SkillbookLayout.stepped(from: 2, by: -1), 1, "Pinch out: fewer, larger cards.")
+        XCTAssertEqual(SkillbookLayout.stepped(from: 1, by: -1), 1, "Stops at a single column.")
+        XCTAssertEqual(SkillbookLayout.stepped(from: 3, by: 1), 4, "Pinch in: more, smaller cards.")
+        XCTAssertEqual(SkillbookLayout.stepped(from: 4, by: 1), 4, "Stops at four columns.")
+        XCTAssertGreaterThan(SkillbookLayout.pinchOutThreshold, 1)
+        XCTAssertLessThan(SkillbookLayout.pinchInThreshold, 1)
     }
 }

@@ -122,7 +122,7 @@ final class SessionControllerTests: XCTestCase {
     }
 
     @MainActor
-    func testActiveSessionAndFocusGoalRestoreFromDefaults() {
+    func testActiveSessionRestoresFromDefaults() {
         let suiteName = "SessionControllerTests.restore"
         let defaults = UserDefaults(suiteName: suiteName)!
         defaults.removePersistentDomain(forName: suiteName)
@@ -130,14 +130,12 @@ final class SessionControllerTests: XCTestCase {
 
         let start = Date(timeIntervalSince1970: 2_000)
         let skillID = UUID()
-        let goal = SessionFocusGoal.duration(seconds: 1_800, startingTotalXP: 400)
         let first = SessionController(defaults: defaults)
-        XCTAssertTrue(first.start(skillID: skillID, focusGoal: goal, at: start))
+        XCTAssertTrue(first.start(skillID: skillID, at: start))
 
         let restored = SessionController(defaults: defaults)
         XCTAssertEqual(restored.activeSession?.skillID, skillID)
         XCTAssertEqual(restored.activeSession?.startedAt, start)
-        XCTAssertEqual(restored.activeSession?.focusGoal, goal)
     }
 
     @MainActor
@@ -203,32 +201,7 @@ final class SessionControllerTests: XCTestCase {
     }
 }
 
-final class FocusGoalTests: XCTestCase {
-    func testDurationGoalCompletesAtTarget() {
-        let goal = SessionFocusGoal.duration(seconds: 1_800, startingTotalXP: 200)
-        let progress = FocusGoalProgress.evaluate(
-            goal: goal,
-            sessionSeconds: 1_800,
-            liveTotalXP: 500
-        )
-
-        XCTAssertTrue(progress.isComplete)
-        XCTAssertEqual(progress.fractionComplete, 1)
-    }
-
-    func testProgressionGoalMeasuresFromStartingXP() {
-        let goal = SessionFocusGoal.progression(targetTotalXP: 1_200, startingTotalXP: 1_000)
-        let progress = FocusGoalProgress.evaluate(
-            goal: goal,
-            sessionSeconds: 60,
-            liveTotalXP: 1_100
-        )
-
-        XCTAssertFalse(progress.isComplete)
-        XCTAssertEqual(progress.currentValue, 100)
-        XCTAssertEqual(progress.targetValue, 200)
-        XCTAssertEqual(progress.fractionComplete, 0.5)
-    }
+final class LiveActivityToggleTests: XCTestCase {
 }
 
 final class HistoryAttributionTests: XCTestCase {
@@ -252,30 +225,10 @@ final class HistoryAttributionTests: XCTestCase {
             activeSeconds: 1_200
         )
 
-        let period = QuestEngine.period(for: .daily, calendar: calendar, containing: now)
-        let assignment = QuestAssignment(
-            id: "daily-attribution",
-            templateID: "daily-put-in-time",
-            cadenceRawValue: QuestCadence.daily.rawValue,
-            kindRawValue: QuestKind.activeTime.rawValue,
-            slot: 0,
-            periodStart: period.start,
-            periodEnd: period.end,
-            timeZoneIdentifier: calendar.timeZone.identifier,
-            title: "Put in the Time",
-            questDescription: "Skill today.",
-            systemImage: "hourglass",
-            targetValue: 1_200
-        )
-        assignment.currentValue = QuestEngine.currentValue(
-            for: assignment,
-            skills: [],
-            sessions: [session]
-        )
-        let daily = try XCTUnwrap(QuestEngine.status(assignment))
-
-        XCTAssertEqual(daily.currentValue, 1_200)
-        XCTAssertTrue(daily.isComplete)
+        // A session is credited to the day it ends, never split across midnight.
+        XCTAssertEqual(session.creditedAt, end)
+        XCTAssertTrue(calendar.isDate(session.creditedAt, inSameDayAs: now))
+        XCTAssertFalse(calendar.isDate(session.creditedAt, inSameDayAs: start))
     }
 
     func testRetiredSkillsRemainInLifetimeTotalLevel() {
@@ -344,7 +297,6 @@ final class SessionCommitServiceTests: XCTestCase {
             startedAt: endedAt.addingTimeInterval(TimeInterval(-(thresholdXP * 3))),
             endedAt: endedAt,
             activeSeconds: thresholdXP * 3,
-            focusGoal: nil,
             shouldResumeOnCancel: false
         )
 
@@ -369,7 +321,6 @@ final class SessionCommitServiceTests: XCTestCase {
         XCTAssertEqual(chronicles.first { $0.milestoneLevel == 25 }?.unlockedAt, endedAt)
         XCTAssertFalse(achievements.isEmpty)
         XCTAssertEqual(outcome.endingProgress.level, 25)
-        XCTAssertTrue(outcome.capabilitiesUnlocked.contains(.focusGoals))
         XCTAssertEqual(ledgers.first?.totalActiveSeconds, draft.activeSeconds)
         XCTAssertEqual(ledgers.first?.sessionCount, 1)
     }
@@ -394,7 +345,6 @@ final class SessionCommitServiceTests: XCTestCase {
             startedAt: endedAt.addingTimeInterval(-600),
             endedAt: endedAt,
             activeSeconds: 600,
-            focusGoal: nil,
             shouldResumeOnCancel: false
         )
 
@@ -443,7 +393,6 @@ final class SessionCommitServiceTests: XCTestCase {
             startedAt: endedAt.addingTimeInterval(-600),
             endedAt: endedAt,
             activeSeconds: 600,
-            focusGoal: nil,
             shouldResumeOnCancel: false
         )
         _ = try SessionCommitService.commit(
@@ -500,7 +449,6 @@ final class SessionCommitServiceTests: XCTestCase {
             startedAt: endedAt.addingTimeInterval(TimeInterval(-(thresholdXP * 3))),
             endedAt: endedAt,
             activeSeconds: thresholdXP * 3,
-            focusGoal: nil,
             shouldResumeOnCancel: false
         )
         _ = try SessionCommitService.commit(
@@ -532,7 +480,7 @@ final class SessionCommitServiceTests: XCTestCase {
     }
 
     @MainActor
-    func testJourneymanCommitUnlocksSpecializationCapability() throws {
+    func testJourneymanCommitUnlocksBothMilestoneChapters() throws {
         let container = try makeContainer()
         let context = ModelContext(container)
         let skill = LifeSkill(
@@ -558,7 +506,6 @@ final class SessionCommitServiceTests: XCTestCase {
             startedAt: endedAt.addingTimeInterval(TimeInterval(-duration)),
             endedAt: endedAt,
             activeSeconds: duration,
-            focusGoal: nil,
             shouldResumeOnCancel: false
         )
 
@@ -573,84 +520,9 @@ final class SessionCommitServiceTests: XCTestCase {
         )
 
         XCTAssertEqual(outcome.endingProgress.level, 50)
-        XCTAssertTrue(outcome.capabilitiesUnlocked.contains(.focusGoals))
-        XCTAssertTrue(outcome.capabilitiesUnlocked.contains(.specialization))
         XCTAssertEqual(
             Set(outcome.chroniclesUnlocked.map(\.level)),
             Set([25, 50])
-        )
-    }
-
-    @MainActor
-    func testEditingEarlierSessionDoesNotCompleteItsFocusGoalFromLaterHistory() throws {
-        let container = try makeContainer()
-        let context = ModelContext(container)
-        let skill = LifeSkill(
-            name: "Reading",
-            symbolName: "book",
-            accentHex: "FFFFFF",
-            category: "Learning"
-        )
-        context.insert(skill)
-        try context.save()
-
-        let firstEnd = Date(timeIntervalSince1970: 1_000_000)
-        let goalDraft = CompletedSessionDraft(
-            id: UUID(),
-            skillID: skill.id,
-            startedAt: firstEnd.addingTimeInterval(-60),
-            endedAt: firstEnd,
-            activeSeconds: 60,
-            focusGoal: SessionFocusGoal.xp(amount: 750, startingTotalXP: 0),
-            shouldResumeOnCancel: false
-        )
-        _ = try SessionCommitService.commit(
-            draft: goalDraft,
-            countedSeconds: 60,
-            note: "",
-            source: .timer,
-            skill: skill,
-            in: context,
-            now: firstEnd
-        )
-
-        let laterEnd = firstEnd.addingTimeInterval(86_400)
-        let laterDraft = CompletedSessionDraft(
-            id: UUID(),
-            skillID: skill.id,
-            startedAt: laterEnd.addingTimeInterval(-3_600),
-            endedAt: laterEnd,
-            activeSeconds: 3_600,
-            focusGoal: nil,
-            shouldResumeOnCancel: false
-        )
-        _ = try SessionCommitService.commit(
-            draft: laterDraft,
-            countedSeconds: 3_600,
-            note: "",
-            source: .timer,
-            skill: skill,
-            in: context,
-            now: laterEnd
-        )
-
-        let goalSessionID = goalDraft.id
-        let goalSession = try XCTUnwrap(
-            context.fetch(FetchDescriptor<SkillSession>()).first { $0.id == goalSessionID }
-        )
-        XCTAssertFalse(goalSession.completedFocusGoal)
-
-        _ = try SessionCommitService.update(
-            session: goalSession,
-            endedAt: firstEnd,
-            activeSeconds: 60,
-            note: "Fixed a typo",
-            in: context
-        )
-
-        XCTAssertFalse(
-            goalSession.completedFocusGoal,
-            "XP from later sessions must not complete an earlier session's goal."
         )
     }
 
@@ -765,449 +637,6 @@ final class SkillLedgerServiceTests: XCTestCase {
     }
 }
 
-final class QuestboardV4Tests: XCTestCase {
-    func testGenerationIsDeterministicAndDoesNotRerollExistingPeriod() throws {
-        var calendar = Calendar(identifier: .gregorian)
-        calendar.timeZone = try XCTUnwrap(TimeZone(secondsFromGMT: 0))
-        let now = try XCTUnwrap(
-            calendar.date(from: DateComponents(year: 2026, month: 8, day: 10, hour: 9))
-        )
-        let skills = [
-            LifeSkill(name: "Cooking", symbolName: "fork.knife", accentHex: "FFFFFF", category: "Home"),
-            LifeSkill(name: "Reading", symbolName: "book", accentHex: "FFFFFF", category: "Learning"),
-            LifeSkill(name: "Exercise", symbolName: "figure.run", accentHex: "FFFFFF", category: "Wellbeing")
-        ]
-
-        let first = QuestEngine.makeAssignments(
-            cadence: .daily,
-            skills: skills,
-            sessions: [],
-            existingAssignments: [],
-            calendar: calendar,
-            now: now
-        )
-        let repeated = QuestEngine.makeAssignments(
-            cadence: .daily,
-            skills: skills,
-            sessions: [],
-            existingAssignments: first,
-            calendar: calendar,
-            now: now
-        )
-        let independentlyGenerated = QuestEngine.makeAssignments(
-            cadence: .daily,
-            skills: skills,
-            sessions: [],
-            existingAssignments: [],
-            calendar: calendar,
-            now: now
-        )
-
-        XCTAssertEqual(first.count, 3)
-        XCTAssertEqual(first.map(\.templateID), independentlyGenerated.map(\.templateID))
-        XCTAssertEqual(first.first?.templateID, "daily-put-in-time")
-        XCTAssertTrue(repeated.isEmpty)
-    }
-
-    func testIneligibleQuestTypesAreNotGenerated() throws {
-        let now = Date(timeIntervalSince1970: 2_000_000_000)
-        let skills = [
-            LifeSkill(name: "Cooking", symbolName: "fork.knife", accentHex: "FFFFFF", category: "Home", createdAt: now),
-            LifeSkill(name: "Reading", symbolName: "book", accentHex: "FFFFFF", category: "Learning", createdAt: now)
-        ]
-
-        let daily = QuestEngine.makeAssignments(
-            cadence: .daily,
-            skills: skills,
-            sessions: [],
-            existingAssignments: [],
-            now: now
-        )
-        let weekly = QuestEngine.makeAssignments(
-            cadence: .weekly,
-            skills: skills,
-            sessions: [],
-            existingAssignments: [],
-            now: now
-        )
-        let identifiers = Set((daily + weekly).map(\.templateID))
-
-        XCTAssertFalse(identifiers.contains("daily-diversify"))
-        XCTAssertFalse(identifiers.contains("daily-old-friend"))
-        XCTAssertFalse(identifiers.contains("daily-finish-focus"))
-        XCTAssertFalse(identifiers.contains("weekly-journeyman-work"))
-    }
-
-    @MainActor
-    func testCompletedQuestRemainsEarnedAfterSessionCorrection() throws {
-        let container = try makeV4Container()
-        let context = ModelContext(container)
-        let skill = LifeSkill(
-            name: "Reading",
-            symbolName: "book",
-            accentHex: "FFFFFF",
-            category: "Learning"
-        )
-        context.insert(skill)
-        try context.save()
-
-        let endedAt = Date.now
-        let draft = CompletedSessionDraft(
-            id: UUID(),
-            skillID: skill.id,
-            startedAt: endedAt.addingTimeInterval(-3_600),
-            endedAt: endedAt,
-            activeSeconds: 3_600,
-            focusGoal: nil,
-            shouldResumeOnCancel: false
-        )
-        let outcome = try SessionCommitService.commit(
-            draft: draft,
-            countedSeconds: 3_600,
-            note: "Deep reading",
-            source: .timer,
-            skill: skill,
-            in: context,
-            now: endedAt
-        )
-        XCTAssertFalse(outcome.questsCompleted.isEmpty)
-
-        let session = try XCTUnwrap(context.fetch(FetchDescriptor<SkillSession>()).first)
-        let completedBefore = try XCTUnwrap(
-            context.fetch(FetchDescriptor<QuestAssignment>()).first {
-                $0.completedAt != nil
-            }
-        )
-        _ = try SessionCommitService.update(
-            session: session,
-            endedAt: endedAt,
-            activeSeconds: 60,
-            note: "Corrected",
-            in: context
-        )
-
-        let assignment = try XCTUnwrap(
-            context.fetch(FetchDescriptor<QuestAssignment>()).first {
-                $0.id == completedBefore.id
-            }
-        )
-        XCTAssertNotNil(assignment.completedAt)
-        XCTAssertTrue(try XCTUnwrap(QuestEngine.status(assignment)).isComplete)
-    }
-
-    @MainActor
-    func testDailyLedgerRebuildsExactTimeAndXP() throws {
-        let container = try makeV4Container()
-        let context = ModelContext(container)
-        let skill = LifeSkill(
-            name: "Cooking",
-            symbolName: "fork.knife",
-            accentHex: "FFFFFF",
-            category: "Home"
-        )
-        context.insert(skill)
-        let end = Date(timeIntervalSince1970: 2_000_000_000)
-        context.insert(
-            SkillSession(
-                skillID: skill.id,
-                startedAt: end.addingTimeInterval(-3),
-                endedAt: end,
-                activeSeconds: 3
-            )
-        )
-        context.insert(
-            SkillSession(
-                skillID: skill.id,
-                startedAt: end.addingTimeInterval(-63),
-                endedAt: end.addingTimeInterval(60),
-                activeSeconds: 60
-            )
-        )
-        try context.save()
-
-        try ActivityDayLedgerService.rebuildAll(in: context)
-        let ledger = try XCTUnwrap(
-            context.fetch(FetchDescriptor<ActivityDayLedger>()).first
-        )
-        XCTAssertEqual(ledger.totalActiveSeconds, 63)
-        XCTAssertEqual(ledger.xpEarned, 21)
-        XCTAssertEqual(ledger.sessionCount, 2)
-        XCTAssertEqual(ledger.distinctSkillCount, 1)
-    }
-
-    @MainActor
-    func testLongerSessionCreatesPersonalBestReveal() {
-        let skill = LifeSkill(
-            name: "Reading",
-            symbolName: "book",
-            accentHex: "FFFFFF",
-            category: "Learning"
-        )
-        let firstEnd = Date(timeIntervalSince1970: 100_000)
-        let first = SkillSession(
-            skillID: skill.id,
-            startedAt: firstEnd.addingTimeInterval(-600),
-            endedAt: firstEnd,
-            activeSeconds: 600
-        )
-        let secondEnd = firstEnd.addingTimeInterval(86_400)
-        let second = SkillSession(
-            skillID: skill.id,
-            startedAt: secondEnd.addingTimeInterval(-900),
-            endedAt: secondEnd,
-            activeSeconds: 900
-        )
-
-        let records = PersonalRecordEngine.newRecords(
-            triggeringSession: second,
-            beforeSessions: [first],
-            afterSessions: [first, second],
-            skills: [skill]
-        )
-
-        XCTAssertTrue(records.contains { $0.kind == .longestSkillSession })
-        XCTAssertEqual(
-            records.first { $0.kind == .longestSkillSession }?.previousValue,
-            600
-        )
-    }
-
-    @MainActor
-    private func makeV4Container() throws -> ModelContainer {
-        let schema = Schema([
-            LifeSkill.self,
-            SkillSession.self,
-            AchievementUnlock.self,
-            ChronicleUnlock.self,
-            SkillLedger.self,
-            SkillSpecialization.self,
-            QuestAssignment.self,
-            ActivityDayLedger.self,
-            PersonalRecordEvent.self,
-            SkillPathAssignment.self,
-            CharacterPathLedger.self,
-            CharacterProfile.self,
-            CharacterTitleUnlock.self,
-            ExpertChallenge.self,
-            SkillLegacy.self
-        ])
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        return try ModelContainer(for: schema, configurations: [configuration])
-    }
-}
-
-final class CharacterProgressionV5Tests: XCTestCase {
-    @MainActor
-    func testEffectiveDatedAssignmentsPreserveEarlierPathHistory() {
-        let skillID = UUID()
-        let insight = SkillPathAssignment(
-            id: "insight",
-            skillID: skillID,
-            pathRawValue: CharacterPath.insight.rawValue,
-            effectiveFrom: Date(timeIntervalSince1970: 100),
-            isConfirmed: true
-        )
-        let craft = SkillPathAssignment(
-            id: "craft",
-            skillID: skillID,
-            pathRawValue: CharacterPath.craft.rawValue,
-            effectiveFrom: Date(timeIntervalSince1970: 300),
-            isConfirmed: true
-        )
-        let first = SkillSession(
-            skillID: skillID,
-            startedAt: Date(timeIntervalSince1970: 140),
-            endedAt: Date(timeIntervalSince1970: 200),
-            activeSeconds: 60
-        )
-        let second = SkillSession(
-            skillID: skillID,
-            startedAt: Date(timeIntervalSince1970: 340),
-            endedAt: Date(timeIntervalSince1970: 400),
-            activeSeconds: 60
-        )
-
-        let totals = CharacterProgressionEngine.totals(
-            sessions: [first, second],
-            assignments: [insight, craft]
-        )
-
-        XCTAssertEqual(totals[.insight], 60)
-        XCTAssertEqual(totals[.craft], 60)
-    }
-
-    @MainActor
-    func testPathTitleRemainsEarnedAfterHistoryCorrection() throws {
-        let container = try makeContainer()
-        let context = ModelContext(container)
-        let skill = LifeSkill(
-            name: "Reading",
-            symbolName: "book",
-            accentHex: "FFFFFF",
-            category: "Learning",
-            createdAt: Date(timeIntervalSince1970: 100)
-        )
-        context.insert(skill)
-        CharacterProgressionService.recordInitialAssignment(
-            skill: skill,
-            path: .insight,
-            in: context
-        )
-        let requiredSeconds = ProgressionEngine.cumulativeXP(
-            toReach: 25,
-            curveVersion: 1
-        ) * ProgressionEngine.secondsPerXP(curveVersion: 1)
-        let session = SkillSession(
-            skillID: skill.id,
-            startedAt: Date(timeIntervalSince1970: 200),
-            endedAt: Date(timeIntervalSince1970: 200 + Double(requiredSeconds)),
-            activeSeconds: requiredSeconds
-        )
-        context.insert(session)
-
-        _ = try CharacterProgressionService.reconcile(
-            skills: [skill],
-            beforeSessions: [],
-            afterSessions: [session],
-            triggeringSession: session,
-            in: context,
-            now: session.endedAt
-        )
-        try context.save()
-        XCTAssertTrue(
-            try context.fetch(FetchDescriptor<CharacterTitleUnlock>())
-                .contains { $0.id == "path-title|insight|25" }
-        )
-
-        _ = try CharacterProgressionService.reconcile(
-            skills: [skill],
-            beforeSessions: [session],
-            afterSessions: [],
-            triggeringSession: nil,
-            in: context,
-            now: session.endedAt.addingTimeInterval(1)
-        )
-        try context.save()
-
-        XCTAssertTrue(
-            try context.fetch(FetchDescriptor<CharacterTitleUnlock>())
-                .contains { $0.id == "path-title|insight|25" }
-        )
-        XCTAssertEqual(
-            try context.fetch(FetchDescriptor<CharacterPathLedger>())
-                .first { $0.pathRawValue == CharacterPath.insight.rawValue }?
-                .totalActiveSeconds,
-            0
-        )
-    }
-
-    @MainActor
-    func testWeeklyBoardReservesACharacterPathQuest() {
-        let now = Date(timeIntervalSince1970: 2_000_000_000)
-        let skill = LifeSkill(
-            name: "Reading",
-            symbolName: "book",
-            accentHex: "FFFFFF",
-            category: "Learning",
-            createdAt: now.addingTimeInterval(-86_400)
-        )
-        let assignment = SkillPathAssignment(
-            id: "reading-path",
-            skillID: skill.id,
-            pathRawValue: CharacterPath.insight.rawValue,
-            effectiveFrom: skill.createdAt,
-            isConfirmed: true
-        )
-        let generated = QuestEngine.makeAssignments(
-            cadence: .weekly,
-            skills: [skill],
-            sessions: [],
-            existingAssignments: [],
-            pathAssignments: [assignment],
-            now: now
-        )
-
-        XCTAssertEqual(generated.count, 2)
-        XCTAssertTrue(generated.contains { $0.templateID == "weekly-long-haul" })
-        XCTAssertTrue(generated.contains { $0.templateID == "weekly-character-path" })
-        XCTAssertEqual(
-            generated.first { $0.templateID == "weekly-character-path" }?.targetPathRawValue,
-            CharacterPath.insight.rawValue
-        )
-    }
-
-    @MainActor
-    func testExpertChallengeCompletionCreatesPermanentTitle() throws {
-        let container = try makeContainer()
-        let context = ModelContext(container)
-        let skill = LifeSkill(
-            name: "Cooking",
-            symbolName: "frying.pan.fill",
-            accentHex: "FFFFFF",
-            category: "Home"
-        )
-        context.insert(skill)
-        CharacterProgressionService.recordInitialAssignment(
-            skill: skill,
-            path: .craft,
-            in: context
-        )
-        let requiredForExpert = ProgressionEngine.cumulativeXP(
-            toReach: 75,
-            curveVersion: 1
-        ) * ProgressionEngine.secondsPerXP(curveVersion: 1)
-        let historyEnd = Date(timeIntervalSince1970: 1_000_000)
-        let history = SkillSession(
-            skillID: skill.id,
-            startedAt: historyEnd.addingTimeInterval(TimeInterval(-requiredForExpert)),
-            endedAt: historyEnd,
-            activeSeconds: requiredForExpert
-        )
-        context.insert(history)
-        try context.save()
-
-        let challengeStart = historyEnd.addingTimeInterval(1)
-        let challenge = try CharacterProgressionService.startExpertChallenge(
-            skill: skill,
-            kind: .activeTime,
-            in: context,
-            now: challengeStart
-        )
-        let completingSession = SkillSession(
-            skillID: skill.id,
-            startedAt: challengeStart,
-            endedAt: challengeStart.addingTimeInterval(10 * 3_600),
-            activeSeconds: 10 * 3_600
-        )
-        context.insert(completingSession)
-
-        let outcome = try CharacterProgressionService.reconcile(
-            skills: [skill],
-            beforeSessions: [history],
-            afterSessions: [history, completingSession],
-            triggeringSession: completingSession,
-            in: context,
-            now: completingSession.endedAt
-        )
-        try context.save()
-
-        XCTAssertNotNil(challenge.completedAt)
-        XCTAssertEqual(outcome.expertChallengesCompleted.map(\.id), [challenge.id])
-        XCTAssertTrue(outcome.titlesUnlocked.contains { $0.title == "Expert of Cooking" })
-        XCTAssertTrue(
-            try context.fetch(FetchDescriptor<CharacterTitleUnlock>())
-                .contains { $0.id.hasPrefix("expert|") }
-        )
-    }
-
-    @MainActor
-    private func makeContainer() throws -> ModelContainer {
-        let schema = Schema(versionedSchema: SkillingTimeSchemaV5.self)
-        let configuration = ModelConfiguration(schema: schema, isStoredInMemoryOnly: true)
-        return try ModelContainer(for: schema, configurations: [configuration])
-    }
-}
-
 final class SchemaMigrationV5Tests: XCTestCase {
     @MainActor
     func testV3StoreMigratesWithoutLosingAuthoritativeHistory() throws {
@@ -1285,7 +714,7 @@ final class SchemaMigrationV5Tests: XCTestCase {
     }
 
     @MainActor
-    func testV4StoreMigratesAndCharacterHistoryRebuilds() throws {
+    func testV4StoreMigratesWithHistoryIntact() throws {
         let directory = FileManager.default.temporaryDirectory
             .appendingPathComponent("SkillingTimeV5Migration-\(UUID().uuidString)", isDirectory: true)
         try FileManager.default.createDirectory(at: directory, withIntermediateDirectories: true)
@@ -1347,20 +776,11 @@ final class SchemaMigrationV5Tests: XCTestCase {
             try context.fetch(FetchDescriptor<SkillSession>()).first?.note,
             "Preserve v4 history"
         )
-        try CharacterProgressionService.prepare(in: context, now: endedAt)
-
-        let assignment = try XCTUnwrap(
-            context.fetch(FetchDescriptor<SkillPathAssignment>()).first
+        XCTAssertEqual(
+            try context.fetch(FetchDescriptor<LifeSkill>()).map(\.id),
+            [skillID]
         )
-        let ledger = try XCTUnwrap(
-            context.fetch(FetchDescriptor<CharacterPathLedger>()).first {
-                $0.pathRawValue == CharacterPath.insight.rawValue
-            }
-        )
-        XCTAssertEqual(assignment.skillID, skillID)
-        XCTAssertEqual(assignment.path, .insight)
-        XCTAssertEqual(ledger.totalActiveSeconds, 1_800)
-        XCTAssertNotNil(try context.fetch(FetchDescriptor<CharacterProfile>()).first)
+        XCTAssertEqual(try context.fetch(FetchDescriptor<SkillSession>()).first?.id, sessionID)
     }
 }
 
@@ -1380,8 +800,7 @@ final class ProgressionNotificationPlannerTests: XCTestCase {
             accumulatedActiveSeconds: 0,
             activeSegmentStartedAt: now.addingTimeInterval(-45),
             finishRequestedAt: nil,
-            shouldResumeAfterCancelledFinish: nil,
-            focusGoal: nil
+            shouldResumeAfterCancelledFinish: nil
         )
 
         let plan = ProgressionNotificationPlanner.plan(
@@ -1410,8 +829,7 @@ final class ProgressionNotificationPlannerTests: XCTestCase {
             accumulatedActiveSeconds: 45,
             activeSegmentStartedAt: nil,
             finishRequestedAt: nil,
-            shouldResumeAfterCancelledFinish: nil,
-            focusGoal: nil
+            shouldResumeAfterCancelledFinish: nil
         )
         var pending = paused
         pending.finishRequestedAt = .now
@@ -1519,161 +937,6 @@ final class AuditRegressionTests: XCTestCase {
 
         XCTAssertFalse(achievementIDs.contains("global-level-25"))
         XCTAssertEqual(status?.isUnlocked, false)
-    }
-
-    func testTimeZoneChangeDoesNotDuplicateTheCurrentBoard() throws {
-        var chicago = Calendar(identifier: .gregorian)
-        chicago.timeZone = try XCTUnwrap(TimeZone(identifier: "America/Chicago"))
-        var newYork = Calendar(identifier: .gregorian)
-        newYork.timeZone = try XCTUnwrap(TimeZone(identifier: "America/New_York"))
-        let now = try XCTUnwrap(
-            chicago.date(from: DateComponents(year: 2026, month: 8, day: 10, hour: 9))
-        )
-        let skills = [
-            LifeSkill(name: "Cooking", symbolName: "fork.knife", accentHex: "FFFFFF", category: "Home"),
-            LifeSkill(name: "Reading", symbolName: "book", accentHex: "FFFFFF", category: "Learning"),
-            LifeSkill(name: "Exercise", symbolName: "figure.run", accentHex: "FFFFFF", category: "Wellbeing")
-        ]
-
-        let beforeTravel = QuestEngine.makeAssignments(
-            cadence: .daily,
-            skills: skills,
-            sessions: [],
-            existingAssignments: [],
-            calendar: chicago,
-            now: now
-        )
-        let afterTravel = QuestEngine.makeAssignments(
-            cadence: .daily,
-            skills: skills,
-            sessions: [],
-            existingAssignments: beforeTravel,
-            calendar: newYork,
-            now: now
-        )
-
-        XCTAssertEqual(beforeTravel.count, 3)
-        XCTAssertTrue(afterTravel.isEmpty, "The running board keeps its slots until it ends.")
-    }
-
-    @MainActor
-    func testClosedQuestPeriodOnlyCompletesForTheTimerSessionBeingSaved() {
-        let periodStart = Date(timeIntervalSince1970: 1_000_000)
-        let periodEnd = periodStart.addingTimeInterval(86_400)
-        func makeAssignment() -> QuestAssignment {
-            QuestAssignment(
-                id: "closed-\(UUID().uuidString)",
-                templateID: "daily-put-in-time",
-                cadenceRawValue: QuestCadence.daily.rawValue,
-                kindRawValue: QuestKind.activeTime.rawValue,
-                slot: 0,
-                periodStart: periodStart,
-                periodEnd: periodEnd,
-                timeZoneIdentifier: "UTC",
-                title: "Put in the Time",
-                questDescription: "Skill today.",
-                systemImage: "hourglass",
-                targetValue: 600
-            )
-        }
-        let skillID = UUID()
-
-        let manual = SkillSession(
-            skillID: skillID,
-            startedAt: periodStart.addingTimeInterval(100),
-            endedAt: periodStart.addingTimeInterval(1_000),
-            activeSeconds: 900,
-            source: .manual
-        )
-        let backdated = makeAssignment()
-        let manualCompleted = QuestBoardService.reconcile(
-            assignments: [backdated],
-            skills: [],
-            sessions: [manual],
-            triggeringSessionID: manual.id,
-            now: periodEnd.addingTimeInterval(3_600)
-        )
-        XCTAssertTrue(manualCompleted.isEmpty)
-        XCTAssertNil(backdated.completedAt)
-
-        let timer = SkillSession(
-            skillID: skillID,
-            startedAt: periodEnd.addingTimeInterval(-1_000),
-            endedAt: periodEnd.addingTimeInterval(-100),
-            activeSeconds: 900
-        )
-        let savedAfterMidnight = makeAssignment()
-        let timerCompleted = QuestBoardService.reconcile(
-            assignments: [savedAfterMidnight],
-            skills: [],
-            sessions: [timer],
-            triggeringSessionID: timer.id,
-            now: periodEnd.addingTimeInterval(300)
-        )
-        XCTAssertEqual(timerCompleted.count, 1)
-        XCTAssertEqual(savedAfterMidnight.completedAt, timer.endedAt)
-    }
-
-    func testLiveQuestCountdownsAreAnchoredToTheCurrentMoment() {
-        let skill = LifeSkill(
-            name: "Reading",
-            symbolName: "book",
-            accentHex: "FFFFFF",
-            category: "Learning"
-        )
-        let segmentStart = Date(timeIntervalSince1970: 2_000_000)
-        let now = segmentStart.addingTimeInterval(600)
-        let snapshot = ActiveSessionSnapshot(
-            id: UUID(),
-            skillID: skill.id,
-            startedAt: segmentStart,
-            accumulatedActiveSeconds: 0,
-            activeSegmentStartedAt: segmentStart,
-            finishRequestedAt: nil,
-            shouldResumeAfterCancelledFinish: nil,
-            focusGoal: nil
-        )
-        func assignment(kind: QuestKind, currentValue: Int) -> QuestAssignment {
-            QuestAssignment(
-                id: "live-\(kind.rawValue)",
-                templateID: "live",
-                cadenceRawValue: QuestCadence.daily.rawValue,
-                kindRawValue: kind.rawValue,
-                slot: 0,
-                periodStart: segmentStart.addingTimeInterval(-3_600),
-                periodEnd: segmentStart.addingTimeInterval(80_000),
-                timeZoneIdentifier: "UTC",
-                title: "Quest",
-                questDescription: "",
-                systemImage: "timer",
-                targetValue: 1_800,
-                currentValue: currentValue
-            )
-        }
-
-        let activeTime = QuestEngine.liveStatus(
-            assignment: assignment(kind: .activeTime, currentValue: 0),
-            snapshot: snapshot,
-            skill: skill,
-            baseTotalSeconds: 0,
-            at: now
-        )
-        XCTAssertEqual(activeTime?.timerStart, segmentStart)
-        XCTAssertEqual(activeTime?.timerEnd, segmentStart.addingTimeInterval(1_800))
-
-        let deep = QuestEngine.liveStatus(
-            assignment: assignment(kind: .deepSession, currentValue: 1_200),
-            snapshot: snapshot,
-            skill: skill,
-            baseTotalSeconds: 0,
-            at: now
-        )
-        XCTAssertEqual(
-            deep?.timerStart,
-            segmentStart,
-            "An earlier 20-minute session must not shorten this session's countdown."
-        )
-        XCTAssertEqual(deep?.timerEnd, segmentStart.addingTimeInterval(1_800))
     }
 
     func testUnknownCurveFallsBackInsteadOfCrashing() {

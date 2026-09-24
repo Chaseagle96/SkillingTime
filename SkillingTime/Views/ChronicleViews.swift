@@ -1,37 +1,38 @@
 import SwiftData
 import SwiftUI
 
-struct ChronicleRootView: View {
-    @Environment(\.accessibilityReduceMotion) private var reduceMotion
+enum ChronicleSection {
+    case milestones
+    case achievements
 
+    var title: String {
+        switch self {
+        case .milestones: "Milestones"
+        case .achievements: "Achievements"
+        }
+    }
+}
+
+/// Milestone chapters or the Achievements gallery, opened from the profile menu.
+struct ChronicleRootView: View {
     @Query(sort: \LifeSkill.sortOrder) private var skills: [LifeSkill]
     @Query private var sessions: [SkillSession]
     @Query private var ledgers: [SkillLedger]
     @Query(sort: \AchievementUnlock.unlockedAt) private var achievementUnlocks: [AchievementUnlock]
     @Query(sort: \ChronicleUnlock.unlockedAt) private var chronicleUnlocks: [ChronicleUnlock]
-    @State private var selection = 0
+
+    let section: ChronicleSection
 
     var body: some View {
-        let index = SessionAnalytics.index(ledgers: ledgers)
-
-        VStack(spacing: 0) {
-            if AppFeatures.achievementsGallery {
-                Picker("Chronicle section", selection: $selection) {
-                    Text("Chronicle").tag(0)
-                    Text("Achievements").tag(1)
-                }
-                .pickerStyle(.segmented)
-                .padding(.horizontal, 16)
-                .padding(.vertical, 10)
-            }
-
-            if selection == 0 || !AppFeatures.achievementsGallery {
+        Group {
+            switch section {
+            case .milestones:
                 ChronicleListView(
                     skills: skills,
-                    index: index,
+                    index: SessionAnalytics.index(ledgers: ledgers),
                     unlocks: chronicleUnlocks
                 )
-            } else {
+            case .achievements:
                 AchievementGalleryView(
                     skills: skills,
                     sessions: sessions,
@@ -39,14 +40,7 @@ struct ChronicleRootView: View {
                 )
             }
         }
-        .navigationTitle(AppFeatures.achievementsGallery ? "Chronicle" : "Milestones")
-        .animation(
-            SkillingTimeMotion.animation(
-                SkillingTimeMotion.responsive,
-                reduceMotion: reduceMotion
-            ),
-            value: selection
-        )
+        .navigationTitle(section.title)
         .skillingTimeScreenBackground()
     }
 }
@@ -105,7 +99,7 @@ private struct ChronicleListView: View {
                 }
             }
             .padding(16)
-            .padding(.bottom, 110)
+            .padding(.bottom, 32)
         }
     }
 }
@@ -365,7 +359,7 @@ private struct AchievementGalleryView: View {
                 }
             }
             .padding(16)
-            .padding(.bottom, 110)
+            .padding(.bottom, 32)
         }
     }
 }

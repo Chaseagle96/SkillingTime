@@ -1,35 +1,6 @@
 import Foundation
 import SwiftData
 
-enum SkillCapability: String, Hashable, Sendable {
-    case focusGoals
-    case specialization
-    case expertChallenge
-    case legacy
-
-    var title: String {
-        switch self {
-        case .focusGoals: "Focus Goals"
-        case .specialization: "Specialization"
-        case .expertChallenge: "Expert Challenges"
-        case .legacy: "Legacy"
-        }
-    }
-
-    var description: String {
-        switch self {
-        case .focusGoals:
-            "Set a duration, XP, or progression target before beginning this Skill."
-        case .specialization:
-            "Give this Skill a custom identity without changing its XP or progression."
-        case .expertChallenge:
-            "Undertake a substantial 30-day challenge in this Expert Skill."
-        case .legacy:
-            "Create a permanent Master title and crest for this Skill."
-        }
-    }
-}
-
 struct SessionOutcome: Identifiable, Sendable {
     let id: UUID
     let skillID: UUID
@@ -43,13 +14,7 @@ struct SessionOutcome: Identifiable, Sendable {
     let levelsCrossed: [Int]
     let chroniclesUnlocked: [ChronicleEntry]
     let achievementsUnlocked: [AchievementDefinition]
-    let questsCompleted: [QuestStatus]
     let personalRecords: [PersonalRecordReveal]
-    let pathProgress: CharacterPathProgressOutcome?
-    let characterTitlesUnlocked: [CharacterTitleReveal]
-    let expertChallengesCompleted: [ExpertChallengeReveal]
-    let capabilitiesUnlocked: [SkillCapability]
-    let focusGoalResult: FocusGoalProgress?
     let note: String
     let wasAlreadyCommitted: Bool
 
@@ -124,7 +89,6 @@ enum SessionCommitService {
             let chronicleRecords = try modelContext.fetch(FetchDescriptor<ChronicleUnlock>())
             let ledgers = try modelContext.fetch(FetchDescriptor<SkillLedger>())
             let dayLedgers = try modelContext.fetch(FetchDescriptor<ActivityDayLedger>())
-            var questAssignments = try modelContext.fetch(FetchDescriptor<QuestAssignment>())
             let personalRecordEvents = try modelContext.fetch(
                 FetchDescriptor<PersonalRecordEvent>()
             )
@@ -136,34 +100,6 @@ enum SessionCommitService {
             let previousRewardIdentifiers = Set(
                 achievementRecords.map(\.id) + chronicleRecords.map(\.id)
             )
-            _ = try CharacterProgressionService.reconcile(
-                skills: skills,
-                beforeSessions: beforeSessions,
-                afterSessions: beforeSessions,
-                triggeringSession: nil,
-                in: modelContext,
-                now: draft.endedAt
-            )
-            let pathAssignments = try modelContext.fetch(
-                FetchDescriptor<SkillPathAssignment>()
-            )
-            QuestBoardService.ensureCurrentAssignments(
-                assignments: &questAssignments,
-                skills: skills,
-                sessions: beforeSessions,
-                pathAssignments: pathAssignments,
-                in: modelContext,
-                now: draft.endedAt
-            )
-            _ = QuestBoardService.reconcile(
-                assignments: questAssignments,
-                skills: skills,
-                sessions: beforeSessions,
-                pathAssignments: pathAssignments,
-                triggeringSessionID: nil,
-                now: now
-            )
-
             let committedSession: SkillSession
             let wasAlreadyCommitted: Bool
 
@@ -173,23 +109,6 @@ enum SessionCommitService {
             } else {
                 let safeNote = note.trimmingCharacters(in: .whitespacesAndNewlines)
                 let adjustedStart = draft.endedAt.addingTimeInterval(TimeInterval(-countedSeconds))
-                let beforeSkillSeconds = skillSeconds(
-                    for: skill.id,
-                    creditedBefore: draft.endedAt,
-                    excluding: draft.id,
-                    in: beforeSessions
-                )
-                let liveTotalXP = ProgressionEngine.xp(
-                    forActiveSeconds: beforeSkillSeconds + countedSeconds,
-                    curveVersion: skill.progressionCurveVersion
-                )
-                let completedFocusGoal = draft.focusGoal.map {
-                    FocusGoalProgress.evaluate(
-                        goal: $0,
-                        sessionSeconds: countedSeconds,
-                        liveTotalXP: liveTotalXP
-                    ).isComplete
-                } ?? false
                 let newSession = SkillSession(
                     id: draft.id,
                     skillID: skill.id,
@@ -197,9 +116,7 @@ enum SessionCommitService {
                     endedAt: draft.endedAt,
                     activeSeconds: countedSeconds,
                     note: safeNote,
-                    source: source,
-                    focusGoal: draft.focusGoal,
-                    focusGoalCompleted: completedFocusGoal
+                    source: source
                 )
                 modelContext.insert(newSession)
                 committedSession = newSession
@@ -226,22 +143,6 @@ enum SessionCommitService {
                 existingLedgers: dayLedgers,
                 in: modelContext
             )
-            let completedQuests = QuestBoardService.reconcile(
-                assignments: questAssignments,
-                skills: skills,
-                sessions: afterSessions,
-                pathAssignments: pathAssignments,
-                triggeringSessionID: committedSession.id,
-                now: now
-            )
-            let characterOutcome = try CharacterProgressionService.reconcile(
-                skills: skills,
-                beforeSessions: beforeSessions,
-                afterSessions: afterSessions,
-                triggeringSession: committedSession,
-                in: modelContext,
-                now: now
-            )
             let recordReveals = wasAlreadyCommitted ? [] : PersonalRecordEngine.newRecords(
                 triggeringSession: committedSession,
                 beforeSessions: beforeSessions,
@@ -262,10 +163,7 @@ enum SessionCommitService {
                 afterSessions: afterSessions,
                 afterResolution: afterResolution,
                 previousRewardIdentifiers: previousRewardIdentifiers,
-                questsCompleted: completedQuests,
                 personalRecords: newPersonalRecords,
-                characterOutcome: wasAlreadyCommitted ? .empty : characterOutcome,
-                focusGoal: draft.focusGoal,
                 wasAlreadyCommitted: wasAlreadyCommitted
             )
         } catch let error as SessionCommitError {
@@ -345,8 +243,6 @@ enum SessionCommitService {
             let chronicleRecords = try modelContext.fetch(FetchDescriptor<ChronicleUnlock>())
             let ledgers = try modelContext.fetch(FetchDescriptor<SkillLedger>())
             let dayLedgers = try modelContext.fetch(FetchDescriptor<ActivityDayLedger>())
-            let questAssignments = try modelContext.fetch(FetchDescriptor<QuestAssignment>())
-            let pathAssignments = try modelContext.fetch(FetchDescriptor<SkillPathAssignment>())
             let existingRewardIdentifiers = Set(
                 achievementRecords.map(\.id) + chronicleRecords.map(\.id)
             )
@@ -365,27 +261,6 @@ enum SessionCommitService {
             session.activeSeconds = activeSeconds
             session.note = note.trimmingCharacters(in: .whitespacesAndNewlines)
 
-            if let focusGoal = session.recordedFocusGoal,
-               let skill = skills.first(where: { $0.id == session.skillID }) {
-                // Measure the goal against XP as of this session's end. Using the
-                // Skill's total today would count every later session toward it.
-                let earlierSeconds = skillSeconds(
-                    for: session.skillID,
-                    creditedBefore: endedAt,
-                    excluding: session.id,
-                    in: sessions
-                )
-                let totalXP = ProgressionEngine.xp(
-                    forActiveSeconds: earlierSeconds + activeSeconds,
-                    curveVersion: skill.progressionCurveVersion
-                )
-                session.focusGoalCompletedRawValue = FocusGoalProgress.evaluate(
-                    goal: focusGoal,
-                    sessionSeconds: activeSeconds,
-                    liveTotalXP: totalXP
-                ).isComplete
-            }
-
             let resolution = RewardResolver.resolve(skills: skills, sessions: sessions)
             _ = RewardRecordReconciler.reconcile(
                 resolution: resolution,
@@ -403,20 +278,6 @@ enum SessionCommitService {
                 skills: skills,
                 sessions: sessions,
                 existingLedgers: dayLedgers,
-                in: modelContext
-            )
-            _ = QuestBoardService.reconcile(
-                assignments: questAssignments,
-                skills: skills,
-                sessions: sessions,
-                pathAssignments: pathAssignments,
-                triggeringSessionID: nil
-            )
-            _ = try CharacterProgressionService.reconcile(
-                skills: skills,
-                beforeSessions: sessions,
-                afterSessions: sessions,
-                triggeringSession: nil,
                 in: modelContext
             )
             try modelContext.save()
@@ -442,8 +303,6 @@ enum SessionCommitService {
             let chronicleRecords = try modelContext.fetch(FetchDescriptor<ChronicleUnlock>())
             let ledgers = try modelContext.fetch(FetchDescriptor<SkillLedger>())
             let dayLedgers = try modelContext.fetch(FetchDescriptor<ActivityDayLedger>())
-            let questAssignments = try modelContext.fetch(FetchDescriptor<QuestAssignment>())
-            let pathAssignments = try modelContext.fetch(FetchDescriptor<SkillPathAssignment>())
             let existingRewardIdentifiers = Set(
                 achievementRecords.map(\.id) + chronicleRecords.map(\.id)
             )
@@ -475,20 +334,6 @@ enum SessionCommitService {
                 existingLedgers: dayLedgers,
                 in: modelContext
             )
-            _ = QuestBoardService.reconcile(
-                assignments: questAssignments,
-                skills: skills,
-                sessions: remainingSessions,
-                pathAssignments: pathAssignments,
-                triggeringSessionID: nil
-            )
-            _ = try CharacterProgressionService.reconcile(
-                skills: skills,
-                beforeSessions: sessions,
-                afterSessions: remainingSessions,
-                triggeringSession: nil,
-                in: modelContext
-            )
             try modelContext.save()
             return impact
         } catch let error as SessionCommitError {
@@ -497,23 +342,6 @@ enum SessionCommitService {
         } catch {
             modelContext.rollback()
             throw SessionCommitError.persistence(error.localizedDescription)
-        }
-    }
-
-    /// Active seconds a Skill had accumulated before a session ending at `endedAt`,
-    /// using the same (creditedAt, id) ordering as reward resolution.
-    static func skillSeconds(
-        for skillID: UUID,
-        creditedBefore endedAt: Date,
-        excluding sessionID: UUID,
-        in sessions: [SkillSession]
-    ) -> Int {
-        let sessionKey = sessionID.uuidString
-        return sessions.reduce(0) { total, candidate in
-            guard candidate.skillID == skillID, candidate.id != sessionID else { return total }
-            let isEarlier = candidate.creditedAt < endedAt
-                || (candidate.creditedAt == endedAt && candidate.id.uuidString < sessionKey)
-            return isEarlier ? total + max(0, candidate.activeSeconds) : total
         }
     }
 
@@ -533,10 +361,7 @@ enum SessionCommitService {
         afterSessions: [SkillSession],
         afterResolution: RewardResolution,
         previousRewardIdentifiers: Set<String>,
-        questsCompleted: [QuestStatus],
         personalRecords: [PersonalRecordReveal],
-        characterOutcome: CharacterReconciliationOutcome,
-        focusGoal: SessionFocusGoal?,
         wasAlreadyCommitted: Bool
     ) -> SessionOutcome {
         let beforeSeconds = SessionAnalytics.totalSeconds(for: skill.id, sessions: beforeSessions)
@@ -566,23 +391,6 @@ enum SessionCommitService {
         let chronicles = afterResolution.chronicles
             .filter { newlyResolvedIDs.contains($0.id) }
             .compactMap { ChronicleContent.entry(for: $0.milestoneLevel) }
-        let capabilities = chronicles.compactMap { entry -> SkillCapability? in
-            switch entry.level {
-            case 25: .focusGoals
-            case 50: .specialization
-            case 75: .expertChallenge
-            case 100: .legacy
-            default: nil
-            }
-        }
-        let goalResult = focusGoal.map {
-            FocusGoalProgress.evaluate(
-                goal: $0,
-                sessionSeconds: session.activeSeconds,
-                liveTotalXP: afterXP
-            )
-        }
-
         return SessionOutcome(
             id: session.id,
             skillID: skill.id,
@@ -600,17 +408,7 @@ enum SessionCommitService {
             ).map { Array($0) } ?? [],
             chroniclesUnlocked: wasAlreadyCommitted ? [] : chronicles,
             achievementsUnlocked: wasAlreadyCommitted ? [] : achievements,
-            questsCompleted: wasAlreadyCommitted ? [] : questsCompleted,
             personalRecords: wasAlreadyCommitted ? [] : personalRecords,
-            pathProgress: wasAlreadyCommitted ? nil : characterOutcome.pathProgress,
-            characterTitlesUnlocked: wasAlreadyCommitted
-                ? []
-                : characterOutcome.titlesUnlocked,
-            expertChallengesCompleted: wasAlreadyCommitted
-                ? []
-                : characterOutcome.expertChallengesCompleted,
-            capabilitiesUnlocked: wasAlreadyCommitted ? [] : capabilities,
-            focusGoalResult: goalResult,
             note: session.note,
             wasAlreadyCommitted: wasAlreadyCommitted
         )

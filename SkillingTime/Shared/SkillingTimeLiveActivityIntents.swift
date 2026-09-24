@@ -41,7 +41,6 @@ struct ToggleSkillingTimeSessionIntent: LiveActivityIntent {
         ) else { return .result() }
 
         var state = activity.content.state
-        let wasPaused = state.isPaused
         state.accumulatedActiveSeconds = payload.accumulatedActiveSeconds
         state.activeSegmentStartedAt = payload.activeSegmentStartedAt
         state.isPaused = payload.isPaused
@@ -52,7 +51,6 @@ struct ToggleSkillingTimeSessionIntent: LiveActivityIntent {
             attributes: activity.attributes,
             at: actionDate
         )
-        refreshQuestTimer(&state, wasPaused: wasPaused, at: actionDate)
         await activity.update(ActivityContent(state: state, staleDate: nil))
         await synchronizeProgressionNotification(
             payload: payload,
@@ -88,52 +86,6 @@ struct ToggleSkillingTimeSessionIntent: LiveActivityIntent {
         state.xpRemaining = progress.xpRemaining
         state.progressFraction = progress.fractionComplete
 
-        guard let goal = payload.focusGoal?.goal else {
-            state.focusGoalTitle = nil
-            state.focusGoalProgressLabel = nil
-            state.focusGoalFraction = nil
-            return
-        }
-
-        let evaluated = FocusGoalProgress.evaluate(
-            goal: goal,
-            sessionSeconds: sessionSeconds,
-            liveTotalXP: liveXP
-        )
-        state.focusGoalTitle = evaluated.title
-        state.focusGoalProgressLabel = evaluated.progressLabel
-        state.focusGoalFraction = evaluated.fractionComplete
-    }
-
-    /// Time-based quest countdowns are an interval that only runs while the timer
-    /// runs. Pausing freezes the reached fraction; resuming re-anchors the interval
-    /// at the resume instant so paused time is not counted.
-    private func refreshQuestTimer(
-        _ state: inout SkillingTimeActivityAttributes.ContentState,
-        wasPaused: Bool,
-        at date: Date
-    ) {
-        guard let start = state.questTimerStart,
-              let end = state.questTimerEnd,
-              start < end,
-              state.questIsComplete != true else { return }
-        let duration = end.timeIntervalSince(start)
-
-        if state.isPaused, !wasPaused {
-            let reached = min(max(date.timeIntervalSince(start), 0), duration)
-            state.questFraction = reached / duration
-            state.questProgressLabel = questLabel(reached: reached, duration: duration)
-        } else if !state.isPaused, wasPaused {
-            let reached = min(max((state.questFraction ?? 0) * duration, 0), duration)
-            let newStart = date.addingTimeInterval(-reached)
-            state.questTimerStart = newStart
-            state.questTimerEnd = newStart.addingTimeInterval(duration)
-            state.questProgressLabel = questLabel(reached: reached, duration: duration)
-        }
-    }
-
-    private func questLabel(reached: TimeInterval, duration: TimeInterval) -> String {
-        "\(DurationText.compact(Int(reached))) of \(DurationText.compact(Int(duration.rounded())))"
     }
 
     private func synchronizeProgressionNotification(

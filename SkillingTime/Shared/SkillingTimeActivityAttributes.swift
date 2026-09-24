@@ -11,15 +11,6 @@ struct SkillingTimeActivityAttributes: ActivityAttributes {
         var xpEarned: Int
         var xpRemaining: Int
         var progressFraction: Double
-        var focusGoalTitle: String?
-        var focusGoalProgressLabel: String?
-        var focusGoalFraction: Double?
-        var questTitle: String?
-        var questProgressLabel: String?
-        var questFraction: Double?
-        var questTimerStart: Date?
-        var questTimerEnd: Date?
-        var questIsComplete: Bool?
         var isPaused: Bool
         var isAwaitingCommit: Bool
 

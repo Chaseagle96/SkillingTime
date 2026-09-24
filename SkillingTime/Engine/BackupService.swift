@@ -4,7 +4,9 @@ import SwiftUI
 import UniformTypeIdentifiers
 
 /// A complete, human-readable copy of everything that cannot be recomputed.
-/// Ledgers (per-Skill, per-day, per-Path) are derived and rebuilt after restore.
+/// Ledgers (per-Skill, per-day) are derived and rebuilt after restore. Records of
+/// retired systems (Quests, Paths, titles, Expert Challenges, Specializations,
+/// Legacies) are still exported and restored so no history is ever lost.
 struct SkillingTimeBackup: Codable, Equatable {
     static let currentFormatVersion = 1
 
@@ -552,8 +554,6 @@ enum BackupService {
         try SkillLedgerService.rebuildAll(in: modelContext)
         try ActivityDayLedgerService.rebuildAll(in: modelContext)
         try RewardBackfillService.reconcileAll(in: modelContext)
-        _ = try CharacterProgressionService.prepare(in: modelContext)
-        _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
         return summary
     }
 

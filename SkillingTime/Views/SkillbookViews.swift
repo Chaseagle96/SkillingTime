@@ -11,10 +11,10 @@ struct SkillbookView: View {
     @AppStorage(SkillbookLayout.storageKey) private var preferredColumnCount = SkillbookLayout.defaultColumnCount
     @Query(sort: \LifeSkill.sortOrder) private var allSkills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
-    @Query private var specializations: [SkillSpecialization]
 
     @State private var showingCreateSkill = false
-    @State private var showingRetiredSkills = false
+    @State private var profileDestination: ProfileDestination?
+    @State private var pinchHandled = false
     @State private var editingSkill: LifeSkill?
     @State private var persistenceError: String?
     @Namespace private var skillTransition
@@ -51,27 +51,34 @@ struct SkillbookView: View {
             skills: allSkills,
             index: sessionIndex
         )
+        let snapshot = WidgetSnapshotPublisher.make(
+            skills: allSkills,
+            ledgers: ledgers,
+            days: dayLedgers,
+            now: .now,
+            calendar: .current
+        )
 
         ScrollView {
-            VStack(spacing: 18) {
-                characterHeader(
-                    index: sessionIndex,
-                    lifetimeTotalLevel: lifetimeTotalLevel
+            VStack(spacing: 16) {
+                SkillbookHeroCards(
+                    lifetimeLevel: lifetimeTotalLevel,
+                    snapshot: snapshot,
+                    totalSeconds: sessionIndex.totalSeconds,
+                    sessionCount: sessionIndex.sessionCount,
+                    activeSkillCount: activeSkills.count,
+                    canStart: sessionController.activeSession == nil,
+                    startSkill: startSkill
                 )
                 .skillingTimeReveal(order: 0)
-
-                if !AppFeatures.todayTab {
-                    todayCard
-                        .skillingTimeReveal(order: 0)
-                }
 
                 if activeSkills.isEmpty {
                     EmptyStateCard(
                         systemImage: "sparkles.rectangle.stack",
                         title: "Your active Skillbook is waiting",
                         message: retiredSkills.isEmpty
-                            ? "Create a Skill for anything you want to practice, maintain, or master."
-                            : "Restore a retired Skill or create a new path. Your lifetime history remains preserved."
+                            ? "Tap + to create a Skill for anything you want to practice, maintain, or master."
+                            : "Tap + to create a Skill, or restore a retired one from your profile. Your history is preserved."
                     )
                 } else {
                     LazyVGrid(columns: columns, spacing: density.spacing) {
@@ -91,46 +98,30 @@ struct SkillbookView: View {
                 }
             }
             .padding(.horizontal, 16)
-            .padding(.top, 8)
-            .padding(.bottom, 110)
+            .padding(.top, 4)
+            .padding(.bottom, 24)
         }
-        .navigationTitle("Skillbook")
+        .simultaneousGesture(pinchToResize)
+        .navigationTitle("Skills")
+        .navigationBarTitleDisplayMode(.inline)
         .toolbar {
-            if !retiredSkills.isEmpty {
-                ToolbarItem(placement: .topBarLeading) {
-                    Button {
-                        showingRetiredSkills = true
-                    } label: {
-                        Image(systemName: "archivebox")
-                    }
-                    .accessibilityLabel("Retired Skills")
-                }
-            }
-
-            ToolbarItem(placement: .topBarTrailing) {
-                Menu {
-                    Picker("Columns", selection: $preferredColumnCount) {
-                        ForEach(SkillbookLayout.columnOptions, id: \.self) { count in
-                            Label("\(count) Columns", systemImage: SkillbookLayout.symbol(for: count))
-                                .tag(count)
-                        }
-                    }
-                    if dynamicTypeSize.isAccessibilitySize {
-                        Text("Larger text sizes use two columns.")
-                    }
-                } label: {
-                    Image(systemName: SkillbookLayout.symbol(for: columnCount))
-                }
-                .accessibilityLabel("Skill layout, \(columnCount) columns")
-            }
-
-            ToolbarItem(placement: .topBarTrailing) {
+            ToolbarItem(placement: .topBarLeading) {
                 Button {
                     showingCreateSkill = true
                 } label: {
                     Image(systemName: "plus")
                 }
                 .accessibilityLabel("Create Skill")
+            }
+
+            ToolbarItem(placement: .topBarTrailing) {
+                ProfileMenuButton(
+                    lifetimeLevel: lifetimeTotalLevel,
+                    hasRetiredSkills: !retiredSkills.isEmpty,
+                    columnCount: $preferredColumnCount
+                ) { destination in
+                    profileDestination = destination
+                }
             }
         }
         .sheet(isPresented: $showingCreateSkill) {
@@ -141,8 +132,8 @@ struct SkillbookView: View {
         .sheet(item: $editingSkill) { skill in
             EditSkillView(skill: skill)
         }
-        .sheet(isPresented: $showingRetiredSkills) {
-            RetiredSkillsView()
+        .sheet(item: $profileDestination) { destination in
+            ProfileDestinationView(destination: destination)
         }
         .alert(
             "Skill Not Saved",
@@ -156,6 +147,45 @@ struct SkillbookView: View {
             Text(persistenceError ?? "The requested Skill change could not be saved.")
         }
         .skillingTimeScreenBackground()
+    }
+
+    /// Pinch out for fewer, larger cards (down to one column); pinch in for more,
+    /// smaller cards (up to four). One step per pinch, so a single gesture never
+    /// jumps several sizes.
+    private var pinchToResize: some Gesture {
+        MagnifyGesture(minimumScaleDelta: 0.04)
+            .onChanged { value in
+                guard !pinchHandled else { return }
+                if value.magnification >= SkillbookLayout.pinchOutThreshold {
+                    stepColumns(by: -1)
+                } else if value.magnification <= SkillbookLayout.pinchInThreshold {
+                    stepColumns(by: 1)
+                }
+            }
+            .onEnded { _ in
+                pinchHandled = false
+            }
+    }
+
+    private func stepColumns(by delta: Int) {
+        pinchHandled = true
+        let next = SkillbookLayout.stepped(from: columnCount, by: delta)
+        guard next != columnCount else { return }
+        withAnimation(
+            SkillingTimeMotion.animation(
+                SkillingTimeMotion.responsive,
+                reduceMotion: reduceMotion
+            )
+        ) {
+            preferredColumnCount = next
+        }
+        Haptics.selection()
+    }
+
+    private func startSkill(_ skillID: UUID) {
+        guard sessionController.start(skillID: skillID) else { return }
+        Haptics.sessionStart()
+        presenter.present(skillID: skillID)
     }
 
     @ViewBuilder
@@ -196,10 +226,7 @@ struct SkillbookView: View {
         SkillCard(
             skill: skill,
             density: density,
-            totalSeconds: totalSeconds,
-            specializationTitle: specializations.first {
-                $0.skillID == skill.id
-            }?.title
+            totalSeconds: totalSeconds
         )
     }
 
@@ -231,130 +258,6 @@ struct SkillbookView: View {
             Label("Retire Skill", systemImage: "archivebox")
         }
         .disabled(sessionController.activeSession?.skillID == skill.id)
-    }
-
-    /// Today at a glance plus a single nudge: the practiced Skill closest to its
-    /// next level. Replaces the separate Today tab in the simplified app.
-    private var todayCard: some View {
-        let snapshot = WidgetSnapshotPublisher.make(
-            skills: allSkills,
-            ledgers: ledgers,
-            days: dayLedgers,
-            now: .now,
-            calendar: .current
-        )
-        let nudge = snapshot.closestToLevel
-        let nudgeSkill = nudge.flatMap { summary in activeSkills.first { $0.id == summary.id } }
-
-        return VStack(alignment: .leading, spacing: 12) {
-            HStack(alignment: .firstTextBaseline) {
-                Label("Today", systemImage: "sun.max.fill")
-                    .font(.caption.weight(.bold))
-                    .foregroundStyle(SkillingTimeTheme.gold)
-                Spacer()
-                Text("\(DurationText.compact(snapshot.todaySeconds)) · \(snapshot.todayXP.formatted()) XP")
-                    .font(.subheadline.weight(.semibold))
-                    .contentTransition(.numericText())
-            }
-
-            if let nudge, let nudgeSkill, let seconds = nudge.secondsToNextLevel {
-                HStack(spacing: 12) {
-                    SkillGlyph(
-                        symbolName: nudgeSkill.symbolName,
-                        color: Color(hex: nudgeSkill.accentHex),
-                        size: 38,
-                        rank: ProgressionEngine.rank(for: nudge.level)
-                    )
-                    VStack(alignment: .leading, spacing: 2) {
-                        Text(nudgeSkill.name)
-                            .font(.headline)
-                            .lineLimit(1)
-                        Text("\(DurationText.compact(seconds)) to Level \(nudge.level + 1)")
-                            .font(.caption)
-                            .foregroundStyle(.secondary)
-                    }
-                    Spacer(minLength: 0)
-                    if sessionController.activeSession == nil {
-                        Button {
-                            startNudge(nudgeSkill)
-                        } label: {
-                            Label("Start", systemImage: "play.fill")
-                                .font(.subheadline.weight(.semibold))
-                        }
-                        .buttonStyle(.borderedProminent)
-                        .tint(Color(hex: nudgeSkill.accentHex))
-                        .accessibilityLabel("Start \(nudgeSkill.name)")
-                    }
-                }
-                .accessibilityElement(children: .contain)
-            } else {
-                Text("Start any Skill below. Every minute counts toward its next level.")
-                    .font(.caption)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(16)
-        .background(
-            Color.white.opacity(0.045),
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-        )
-    }
-
-    private func startNudge(_ skill: LifeSkill) {
-        guard sessionController.start(skillID: skill.id, focusGoal: nil) else { return }
-        Haptics.sessionStart()
-        presenter.present(skillID: skill.id)
-    }
-
-    private func characterHeader(
-        index: SessionIndex,
-        lifetimeTotalLevel: Int
-    ) -> some View {
-        HStack(spacing: 14) {
-            ZStack {
-                Circle()
-                    .fill(SkillingTimeTheme.gold.opacity(0.13))
-                Circle()
-                    .strokeBorder(SkillingTimeTheme.gold.opacity(0.55), lineWidth: 1.5)
-                Image(systemName: "book.closed.fill")
-                    .font(.title2)
-                    .foregroundStyle(SkillingTimeTheme.gold)
-            }
-            .frame(width: 54, height: 54)
-
-            VStack(alignment: .leading, spacing: 3) {
-                Text("YOUR SKILLBOOK")
-                    .font(.caption.weight(.bold))
-                    .tracking(1.4)
-                    .foregroundStyle(SkillingTimeTheme.gold)
-                Text(
-                    "\(activeSkills.count) active · \(DurationText.compact(index.totalSeconds)) lifetime"
-                )
-                .font(.subheadline)
-                .foregroundStyle(.secondary)
-            }
-
-            Spacer()
-
-            VStack(alignment: .trailing, spacing: 2) {
-                Text(lifetimeTotalLevel.formatted())
-                    .font(.system(.title, design: .rounded, weight: .bold))
-                Text("LIFETIME LEVEL")
-                    .font(.caption2.weight(.bold))
-                    .tracking(0.8)
-                    .foregroundStyle(.secondary)
-            }
-        }
-        .padding(16)
-        .background(
-            Color.white.opacity(0.045),
-            in: RoundedRectangle(cornerRadius: 22, style: .continuous)
-        )
-        .overlay {
-            RoundedRectangle(cornerRadius: 22, style: .continuous)
-                .strokeBorder(SkillingTimeTheme.gold.opacity(0.18), lineWidth: 1)
-        }
-        .accessibilityElement(children: .combine)
     }
 
     private func move(_ skill: LifeSkill, offset: Int) {
@@ -392,16 +295,6 @@ struct SkillbookView: View {
         }
         Haptics.selection()
         saveSkillChanges()
-        refreshQuestboard()
-    }
-
-    /// Retiring a Skill retires its unfinished quests and refills those slots.
-    private func refreshQuestboard() {
-        do {
-            _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
-        } catch {
-            persistenceError = "The Skill was retired, but the Questboard could not refresh yet. \(error.localizedDescription)"
-        }
     }
 
     private func saveSkillChanges() {
@@ -417,13 +310,15 @@ struct SkillbookView: View {
 /// Two columns is the full card; three and four trade detail for more Skills on
 /// screen. The accessibility label always carries the full description.
 enum SkillCardDensity {
+    case row
     case regular
     case compact
     case dense
 
     init(columnCount: Int) {
         switch columnCount {
-        case ...2: self = .regular
+        case ...1: self = .row
+        case 2: self = .regular
         case 3: self = .compact
         default: self = .dense
         }
@@ -431,6 +326,7 @@ enum SkillCardDensity {
 
     var spacing: CGFloat {
         switch self {
+        case .row: 10
         case .regular: 12
         case .compact: 10
         case .dense: 8
@@ -441,18 +337,31 @@ enum SkillCardDensity {
 enum SkillbookLayout {
     static let storageKey = "skillbook.grid-columns"
     static let defaultColumnCount = 2
-    static let columnOptions = [2, 3, 4]
+    static let columnOptions = [1, 2, 3, 4]
+    /// Pinch scale that counts as a deliberate pinch out (fewer columns) or in.
+    static let pinchOutThreshold: CGFloat = 1.2
+    static let pinchInThreshold: CGFloat = 0.83
 
     /// Clamps a stored preference to a supported value; the largest text sizes
-    /// always use two columns so names and levels stay readable.
+    /// allow at most two columns so names and levels stay readable.
     static func columnCount(preferred: Int, isAccessibilitySize: Bool) -> Int {
-        guard !isAccessibilitySize else { return 2 }
-        return min(max(preferred, columnOptions.first ?? 2), columnOptions.last ?? 4)
+        let clamped = min(max(preferred, columnOptions.first ?? 1), columnOptions.last ?? 4)
+        return isAccessibilitySize ? min(clamped, 2) : clamped
+    }
+
+    /// The next column count one pinch step away, clamped to 1...4.
+    static func stepped(from current: Int, by delta: Int) -> Int {
+        min(max(current + delta, columnOptions.first ?? 1), columnOptions.last ?? 4)
+    }
+
+    static func label(for columnCount: Int) -> String {
+        columnCount == 1 ? "List" : "\(columnCount) Columns"
     }
 
     static func symbol(for columnCount: Int) -> String {
         switch columnCount {
-        case ...2: "square.grid.2x2"
+        case ...1: "list.bullet.rectangle"
+        case 2: "square.grid.2x2"
         case 3: "square.grid.3x3"
         default: "square.grid.4x3.fill"
         }
@@ -463,7 +372,6 @@ private struct SkillCard: View {
     let skill: LifeSkill
     var density: SkillCardDensity = .regular
     let totalSeconds: Int
-    let specializationTitle: String?
 
     private var accent: Color { Color(hex: skill.accentHex) }
     private var progress: ProgressSnapshot {
@@ -479,6 +387,7 @@ private struct SkillCard: View {
 
     private var cornerRadius: CGFloat {
         switch density {
+        case .row: 18
         case .regular: 20
         case .compact: 16
         case .dense: 14
@@ -488,6 +397,7 @@ private struct SkillCard: View {
     var body: some View {
         Group {
             switch density {
+            case .row: rowContent
             case .regular: regularContent
             case .compact: compactContent
             case .dense: denseContent
@@ -544,11 +454,7 @@ private struct SkillCard: View {
                     .foregroundStyle(.primary)
                     .lineLimit(1)
                     .minimumScaleFactor(0.78)
-                Text(
-                    specializationTitle.map {
-                        "\(progress.displayRank) · \($0)"
-                    } ?? progress.displayRank
-                )
+                Text(progress.displayRank)
                     .font(.caption2.weight(.bold))
                     .tracking(0.8)
                     .foregroundStyle(SkillingTimeTheme.rankColor(progress.rank))
@@ -571,6 +477,59 @@ private struct SkillCard: View {
                 )
             }
             .font(.caption2)
+            .foregroundStyle(.secondary)
+        }
+        .padding(14)
+    }
+
+    /// One column: the most detail, readable at a glance.
+    private var rowContent: some View {
+        VStack(alignment: .leading, spacing: 10) {
+            HStack(spacing: 12) {
+                SkillGlyph(
+                    symbolName: skill.symbolName,
+                    color: accent,
+                    size: 44,
+                    rank: progress.rank
+                )
+                VStack(alignment: .leading, spacing: 2) {
+                    Text(skill.name)
+                        .font(.headline)
+                        .foregroundStyle(.primary)
+                        .lineLimit(1)
+                    Text(progress.displayRank)
+                        .font(.caption.weight(.bold))
+                        .foregroundStyle(SkillingTimeTheme.rankColor(progress.rank))
+                        .lineLimit(1)
+                }
+                Spacer(minLength: 8)
+                VStack(alignment: .trailing, spacing: 0) {
+                    Text(progress.level.formatted())
+                        .font(.system(.title2, design: .rounded, weight: .bold))
+                        .contentTransition(.numericText())
+                    Text("LEVEL")
+                        .font(.caption2.weight(.bold))
+                        .tracking(0.7)
+                        .foregroundStyle(.secondary)
+                }
+            }
+
+            SkillProgressBar(
+                fraction: progress.fractionComplete,
+                accent: accent,
+                height: 7
+            )
+
+            HStack {
+                Text("\(DurationText.compact(totalSeconds)) total")
+                Spacer()
+                Text(
+                    progress.level == 100
+                        ? "\(DurationText.compact(progress.xpRemaining * 3)) to next star"
+                        : "\(DurationText.compact(progress.xpRemaining * 3)) to Level \(progress.level + 1)"
+                )
+            }
+            .font(.caption)
             .foregroundStyle(.secondary)
         }
         .padding(14)
@@ -672,7 +631,6 @@ private struct SkillIdentitySections: View {
     @Binding var category: String
     @Binding var selectedSymbol: String
     @Binding var selectedColor: String
-    @Binding var selectedPath: CharacterPath
 
     var body: some View {
         Section("Preview") {
@@ -702,19 +660,6 @@ private struct SkillIdentitySections: View {
                 .textInputAutocapitalization(.words)
             TextField("Category", text: $category)
                 .textInputAutocapitalization(.words)
-        }
-
-        Section {
-            Picker("Path", selection: $selectedPath) {
-                ForEach(CharacterPath.allCases) { path in
-                    Label(path.title, systemImage: path.systemImage)
-                        .tag(path)
-                }
-            }
-        } header: {
-            Text("Character Path")
-        } footer: {
-            Text(selectedPath.description)
         }
 
         Section("Glyph") {
@@ -794,7 +739,6 @@ struct CreateSkillView: View {
     @State private var category = "Personal"
     @State private var selectedSymbol = "sparkles"
     @State private var selectedColor = "D97A43"
-    @State private var selectedPath = CharacterPath.stewardship
     @State private var saveError: String?
 
     var body: some View {
@@ -804,8 +748,7 @@ struct CreateSkillView: View {
                     name: $name,
                     category: $category,
                     selectedSymbol: $selectedSymbol,
-                    selectedColor: $selectedColor,
-                    selectedPath: $selectedPath
+                    selectedColor: $selectedColor
                 )
 
                 if let saveError {
@@ -842,11 +785,6 @@ struct CreateSkillView: View {
             sortOrder: nextSortOrder
         )
         modelContext.insert(skill)
-        CharacterProgressionService.recordInitialAssignment(
-            skill: skill,
-            path: selectedPath,
-            in: modelContext
-        )
 
         do {
             try modelContext.save()
@@ -858,8 +796,6 @@ struct CreateSkillView: View {
 
         do {
             try RewardBackfillService.reconcileAll(in: modelContext)
-            try CharacterProgressionService.prepare(in: modelContext)
-            _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
             dismiss()
         } catch {
             saveError = "The Skill was saved, but its global reward history could not be refreshed yet. \(error.localizedDescription)"
@@ -878,13 +814,11 @@ struct EditSkillView: View {
     @EnvironmentObject private var sessionController: SessionController
 
     let skill: LifeSkill
-    @Query private var pathAssignments: [SkillPathAssignment]
 
     @State private var name: String
     @State private var category: String
     @State private var selectedSymbol: String
     @State private var selectedColor: String
-    @State private var selectedPath: CharacterPath
     @State private var isArchived: Bool
     @State private var saveError: String?
 
@@ -894,15 +828,7 @@ struct EditSkillView: View {
         _category = State(initialValue: skill.category)
         _selectedSymbol = State(initialValue: skill.symbolName)
         _selectedColor = State(initialValue: skill.accentHex)
-        _selectedPath = State(initialValue: CharacterProgressionEngine.suggestedPath(for: skill))
         _isArchived = State(initialValue: skill.isArchived)
-        let skillID = skill.id
-        _pathAssignments = Query(
-            filter: #Predicate<SkillPathAssignment> { assignment in
-                assignment.skillID == skillID
-            },
-            sort: \SkillPathAssignment.effectiveFrom
-        )
     }
 
     var body: some View {
@@ -912,8 +838,7 @@ struct EditSkillView: View {
                     name: $name,
                     category: $category,
                     selectedSymbol: $selectedSymbol,
-                    selectedColor: $selectedColor,
-                    selectedPath: $selectedPath
+                    selectedColor: $selectedColor
                 )
 
                 Section {
@@ -947,12 +872,6 @@ struct EditSkillView: View {
                         )
                 }
             }
-            .task {
-                selectedPath = CharacterProgressionEngine.currentPath(
-                    for: skill.id,
-                    assignments: pathAssignments
-                ) ?? CharacterProgressionEngine.suggestedPath(for: skill)
-            }
         }
     }
 
@@ -963,29 +882,13 @@ struct EditSkillView: View {
         skill.symbolName = selectedSymbol
         skill.accentHex = selectedColor
         skill.isArchived = isArchived
-        CharacterProgressionService.changePath(
-            skill: skill,
-            to: selectedPath,
-            assignments: pathAssignments,
-            in: modelContext
-        )
 
         do {
             try modelContext.save()
+            dismiss()
         } catch {
             modelContext.rollback()
             saveError = error.localizedDescription
-            return
-        }
-
-        // The Skill itself is saved at this point. A failure below only means the
-        // derived Character and Quest data will refresh on the next launch.
-        do {
-            try CharacterProgressionService.prepare(in: modelContext)
-            _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
-            dismiss()
-        } catch {
-            saveError = "Your changes were saved, but Character and Quest progress could not refresh yet. \(error.localizedDescription)"
         }
     }
 }
@@ -1064,6 +967,38 @@ private struct RetiredSkillsView: View {
         } catch {
             modelContext.rollback()
             saveError = error.localizedDescription
+        }
+    }
+}
+
+/// What each profile-menu item opens.
+private struct ProfileDestinationView: View {
+    @Environment(\.dismiss) private var dismiss
+    let destination: ProfileDestination
+
+    var body: some View {
+        switch destination {
+        case .achievements:
+            chronicle(.achievements)
+        case .milestones:
+            chronicle(.milestones)
+        case .retiredSkills:
+            RetiredSkillsView()
+        case .backup:
+            BackupDataView()
+        case .settings:
+            SettingsView()
+        }
+    }
+
+    private func chronicle(_ section: ChronicleSection) -> some View {
+        NavigationStack {
+            ChronicleRootView(section: section)
+                .toolbar {
+                    ToolbarItem(placement: .confirmationAction) {
+                        Button("Done") { dismiss() }
+                    }
+                }
         }
     }
 }

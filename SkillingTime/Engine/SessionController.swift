@@ -9,7 +9,6 @@ struct ActiveSessionSnapshot: Codable, Equatable, Sendable {
     var activeSegmentStartedAt: Date?
     var finishRequestedAt: Date?
     var shouldResumeAfterCancelledFinish: Bool?
-    var focusGoal: SessionFocusGoal?
 
     var isPaused: Bool { activeSegmentStartedAt == nil }
     var isAwaitingCommit: Bool { finishRequestedAt != nil }
@@ -30,7 +29,6 @@ struct CompletedSessionDraft: Identifiable, Equatable, Sendable {
     let startedAt: Date
     let endedAt: Date
     let activeSeconds: Int
-    let focusGoal: SessionFocusGoal?
     let shouldResumeOnCancel: Bool
 }
 
@@ -75,7 +73,6 @@ final class SessionController: ObservableObject {
     @discardableResult
     func start(
         skillID: UUID,
-        focusGoal: SessionFocusGoal? = nil,
         at date: Date = .now
     ) -> Bool {
         guard activeSession == nil else { return false }
@@ -87,8 +84,7 @@ final class SessionController: ObservableObject {
             accumulatedActiveSeconds: 0,
             activeSegmentStartedAt: date,
             finishRequestedAt: nil,
-            shouldResumeAfterCancelledFinish: nil,
-            focusGoal: focusGoal
+            shouldResumeAfterCancelledFinish: nil
         )
         activeSession = session
         persist()
@@ -204,7 +200,6 @@ final class SessionController: ObservableObject {
             startedAt: session.startedAt,
             endedAt: endedAt,
             activeSeconds: session.elapsedSeconds(at: endedAt),
-            focusGoal: session.focusGoal,
             shouldResumeOnCancel: shouldResumeOnCancel
         )
     }

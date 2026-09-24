@@ -7,24 +7,15 @@ struct SkillDetailView: View {
     @EnvironmentObject private var presenter: ActiveSessionPresenter
     @Query private var sessions: [SkillSession]
     @Query private var chronicleUnlocks: [ChronicleUnlock]
-    @Query private var specializations: [SkillSpecialization]
-    @Query private var expertChallenges: [ExpertChallenge]
-    @Query private var legacies: [SkillLegacy]
 
     let skill: LifeSkill
 
     @State private var showingManualEntry = false
-    @State private var showingFocusGoal = false
     @State private var showingReminder = false
-    /// Set by the Focus Goal sheet; the session starts once that sheet is gone so
-    /// the timer screen is never presented while another sheet is still dismissing.
-    @State private var pendingStart: PendingSessionStart?
-    /// Same idea for the summary shown after logging a past session.
+    /// The summary after logging a past session is shown once that sheet is gone,
+    /// so two sheets are never presented at the same moment.
     @State private var pendingManualOutcome: SessionOutcome?
     @State private var showingEditSkill = false
-    @State private var showingSpecialization = false
-    @State private var showingExpertChallenge = false
-    @State private var showingLegacy = false
     @State private var sessionOutcome: SessionOutcome?
     @State private var editingSession: SkillSession?
 
@@ -41,23 +32,6 @@ struct SkillDetailView: View {
         _chronicleUnlocks = Query(
             filter: #Predicate<ChronicleUnlock> { unlock in
                 unlock.skillID == skillID
-            }
-        )
-        _specializations = Query(
-            filter: #Predicate<SkillSpecialization> { specialization in
-                specialization.skillID == skillID
-            }
-        )
-        _expertChallenges = Query(
-            filter: #Predicate<ExpertChallenge> { challenge in
-                challenge.skillID == skillID
-            },
-            sort: \ExpertChallenge.startedAt,
-            order: .reverse
-        )
-        _legacies = Query(
-            filter: #Predicate<SkillLegacy> { legacy in
-                legacy.skillID == skillID
             }
         )
     }
@@ -82,34 +56,6 @@ struct SkillDetailView: View {
 
     private var accent: Color { Color(hex: skill.accentHex) }
 
-    private var hasFocusGoals: Bool {
-        AppFeatures.focusGoals
-            && (progress.level >= 25 || chronicleUnlocks.contains { $0.milestoneLevel == 25 })
-    }
-
-    private var specialization: SkillSpecialization? { specializations.first }
-
-    private var hasSpecializationCapability: Bool {
-        AppFeatures.lateGameCapabilities
-            && (progress.level >= 50 || chronicleUnlocks.contains { $0.milestoneLevel == 50 })
-    }
-
-    private var hasExpertChallengeCapability: Bool {
-        AppFeatures.lateGameCapabilities
-            && (progress.level >= 75 || chronicleUnlocks.contains { $0.milestoneLevel == 75 })
-    }
-
-    private var hasLegacyCapability: Bool {
-        AppFeatures.lateGameCapabilities
-            && (progress.level >= 100 || chronicleUnlocks.contains { $0.milestoneLevel == 100 })
-    }
-
-    private var activeExpertChallenge: ExpertChallenge? {
-        expertChallenges.first { $0.isActive() }
-    }
-
-    private var legacy: SkillLegacy? { legacies.first }
-
     var body: some View {
         ScrollView {
             VStack(spacing: 20) {
@@ -128,13 +74,11 @@ struct SkillDetailView: View {
                     SkillPaceSection(skill: skill, sessions: sessions)
                         .skillingTimeReveal(order: 3)
                 }
-                masteryProgression
-                    .skillingTimeReveal(order: 3)
                 recentHistory
                     .skillingTimeReveal(order: 4)
             }
             .padding(.horizontal, 16)
-            .padding(.bottom, 110)
+            .padding(.bottom, 32)
         }
         .navigationTitle(skill.name)
         .navigationBarTitleDisplayMode(.inline)
@@ -153,35 +97,6 @@ struct SkillDetailView: View {
                             Label("Practice Reminder", systemImage: "bell")
                         }
                     }
-                    if hasSpecializationCapability {
-                        Button {
-                            showingSpecialization = true
-                        } label: {
-                            Label(
-                                specialization == nil
-                                    ? "Choose Specialization"
-                                    : "Edit Specialization",
-                                systemImage: "signature"
-                            )
-                        }
-                    }
-                    if hasExpertChallengeCapability && !skill.isArchived {
-                        Button {
-                            showingExpertChallenge = true
-                        } label: {
-                            Label("Expert Challenge", systemImage: "checkmark.seal.fill")
-                        }
-                    }
-                    if hasLegacyCapability {
-                        Button {
-                            showingLegacy = true
-                        } label: {
-                            Label(
-                                legacy == nil ? "Create Legacy" : "Edit Legacy",
-                                systemImage: "crown.fill"
-                            )
-                        }
-                    }
                 } label: {
                     Image(systemName: "ellipsis.circle")
                 }
@@ -190,17 +105,6 @@ struct SkillDetailView: View {
         }
         .sheet(isPresented: $showingReminder) {
             PracticeReminderSheet(skill: skill)
-        }
-        .sheet(isPresented: $showingFocusGoal, onDismiss: {
-            if let pendingStart {
-                self.pendingStart = nil
-                startSession(focusGoal: pendingStart.focusGoal)
-            }
-        }) {
-            FocusGoalPickerView(skill: skill, progress: progress) { goal in
-                pendingStart = PendingSessionStart(focusGoal: goal)
-                showingFocusGoal = false
-            }
         }
         .sheet(isPresented: $showingManualEntry, onDismiss: {
             if let pendingManualOutcome {
@@ -217,21 +121,6 @@ struct SkillDetailView: View {
         }
         .sheet(isPresented: $showingEditSkill) {
             EditSkillView(skill: skill)
-        }
-        .sheet(isPresented: $showingSpecialization) {
-            SpecializationEditorView(
-                skill: skill,
-                existingSpecialization: specialization
-            )
-        }
-        .sheet(isPresented: $showingExpertChallenge) {
-            ExpertChallengeView(
-                skill: skill,
-                currentChallenge: activeExpertChallenge
-            )
-        }
-        .sheet(isPresented: $showingLegacy) {
-            LegacyEditorView(skill: skill, existingLegacy: legacy)
         }
         .sheet(item: $sessionOutcome) { outcome in
             NavigationStack {
@@ -268,11 +157,6 @@ struct SkillDetailView: View {
                 }
                 .font(.headline)
                 .foregroundStyle(SkillingTimeTheme.rankColor(progress.rank))
-                if let specialization {
-                    Text(specialization.title)
-                        .font(.subheadline.weight(.semibold))
-                        .foregroundStyle(SkillingTimeTheme.gold)
-                }
             }
 
             VStack(spacing: 8) {
@@ -352,27 +236,6 @@ struct SkillDetailView: View {
             .buttonStyle(.bordered)
             .tint(.secondary)
 
-            if hasFocusGoals {
-                Label("Apprentice ability unlocked: Focus Goals", systemImage: "scope")
-                    .font(.caption)
-                    .foregroundStyle(accent)
-            }
-
-            if hasSpecializationCapability {
-                Button {
-                    showingSpecialization = true
-                } label: {
-                    Label(
-                        specialization == nil
-                            ? "Choose Journeyman Specialization"
-                            : "Specialization: \(specialization?.title ?? "")",
-                        systemImage: "signature"
-                    )
-                }
-                .buttonStyle(.bordered)
-                .tint(SkillingTimeTheme.gold)
-            }
-
             if isAnotherSkillActive {
                 Text("Finish or discard the active Skill session before starting another.")
                     .font(.caption)
@@ -424,91 +287,6 @@ struct SkillDetailView: View {
                     value: DurationText.compact(statistics.longestSeconds),
                     systemImage: "timer"
                 )
-            }
-        }
-    }
-
-    @ViewBuilder
-    private var masteryProgression: some View {
-        if hasExpertChallengeCapability || hasLegacyCapability {
-            VStack(spacing: 12) {
-                SectionTitle(
-                    title: "Mastery",
-                    subtitle: "Higher ranks unlock lasting undertakings and identity"
-                )
-
-                if hasExpertChallengeCapability {
-                    Button {
-                        showingExpertChallenge = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: activeExpertChallenge?.systemImage ?? "checkmark.seal.fill")
-                                .font(.title2)
-                                .foregroundStyle(SkillingTimeTheme.gold)
-                                .frame(width: 42)
-                            VStack(alignment: .leading, spacing: 4) {
-                                Text(activeExpertChallenge?.title ?? "Begin an Expert Challenge")
-                                    .font(.headline)
-                                if let challenge = activeExpertChallenge {
-                                    Text(challenge.progressLabel)
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                    ProgressView(value: challenge.fractionComplete)
-                                        .tint(SkillingTimeTheme.gold)
-                                } else {
-                                    Text("Choose a substantial 30-day undertaking for this Skill.")
-                                        .font(.caption)
-                                        .foregroundStyle(.secondary)
-                                }
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.bold())
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(15)
-                        .background(
-                            Color.white.opacity(0.045),
-                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                    .disabled(skill.isArchived)
-                }
-
-                if hasLegacyCapability {
-                    Button {
-                        showingLegacy = true
-                    } label: {
-                        HStack(spacing: 12) {
-                            Image(systemName: legacy?.crestSymbolName ?? "crown.fill")
-                                .font(.title2)
-                                .foregroundStyle(SkillingTimeTheme.gold)
-                                .frame(width: 42)
-                            VStack(alignment: .leading, spacing: 3) {
-                                Text(legacy?.masterTitle ?? "Create a Master Legacy")
-                                    .font(.headline)
-                                Text(
-                                    legacy == nil
-                                        ? "Choose a permanent Master title and crest."
-                                        : "Your Level 100 identity for \(skill.name)."
-                                )
-                                .font(.caption)
-                                .foregroundStyle(.secondary)
-                            }
-                            Spacer()
-                            Image(systemName: "chevron.right")
-                                .font(.caption.bold())
-                                .foregroundStyle(.tertiary)
-                        }
-                        .padding(15)
-                        .background(
-                            SkillingTimeTheme.gold.opacity(0.07),
-                            in: RoundedRectangle(cornerRadius: 18, style: .continuous)
-                        )
-                    }
-                    .buttonStyle(.plain)
-                }
             }
         }
     }
@@ -570,269 +348,9 @@ struct SkillDetailView: View {
             presenter.present(skillID: skill.id)
             return
         }
-        guard sessionController.activeSession == nil else { return }
-
-        if hasFocusGoals {
-            showingFocusGoal = true
-        } else {
-            startSession(focusGoal: nil)
-        }
-    }
-
-    private func startSession(focusGoal: SessionFocusGoal?) {
-        guard sessionController.start(skillID: skill.id, focusGoal: focusGoal) else { return }
+        guard sessionController.start(skillID: skill.id) else { return }
         Haptics.sessionStart()
         presenter.present(skillID: skill.id)
-    }
-}
-
-private struct PendingSessionStart {
-    let focusGoal: SessionFocusGoal?
-}
-
-private struct ExpertChallengeView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-
-    let skill: LifeSkill
-    let currentChallenge: ExpertChallenge?
-
-    @State private var saveError: String?
-    @State private var showingRetireConfirmation = false
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                if let challenge = currentChallenge {
-                    Section("Active Undertaking") {
-                        Label(challenge.title, systemImage: challenge.systemImage)
-                            .font(.headline)
-                        Text(challenge.challengeDescription)
-                            .foregroundStyle(.secondary)
-                        ProgressView(value: challenge.fractionComplete)
-                            .tint(SkillingTimeTheme.gold)
-                        LabeledContent("Progress", value: challenge.progressLabel)
-                        LabeledContent(
-                            "Ends",
-                            value: challenge.endsAt.formatted(
-                                date: .abbreviated,
-                                time: .omitted
-                            )
-                        )
-                    }
-
-                    Section {
-                        Button("Abandon Challenge", role: .destructive) {
-                            showingRetireConfirmation = true
-                        }
-                    } footer: {
-                        Text("Abandoning removes the active undertaking but never changes Skill XP or previously earned rewards.")
-                    }
-                } else {
-                    Section {
-                        ForEach(ExpertChallengeKind.allCases) { kind in
-                            Button {
-                                start(kind)
-                            } label: {
-                                HStack(spacing: 12) {
-                                    Image(systemName: kind.systemImage)
-                                        .foregroundStyle(SkillingTimeTheme.gold)
-                                        .frame(width: 28)
-                                    VStack(alignment: .leading, spacing: 3) {
-                                        Text(kind.title)
-                                            .font(.headline)
-                                        Text(kind.description(skillName: skill.name))
-                                            .font(.caption)
-                                            .foregroundStyle(.secondary)
-                                    }
-                                }
-                                .padding(.vertical, 5)
-                            }
-                            .buttonStyle(.plain)
-                        }
-                    } header: {
-                        Text("Choose an Expert Challenge")
-                    } footer: {
-                        Text("The challenge lasts 30 days and grants an equipable title when completed. It never mints bonus XP.")
-                    }
-                }
-
-                if let saveError {
-                    Section("Could Not Save") {
-                        Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
-                }
-            }
-            .navigationTitle("Expert Challenge")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Done") { dismiss() }
-                }
-            }
-            .confirmationDialog(
-                "Abandon this Expert Challenge?",
-                isPresented: $showingRetireConfirmation,
-                titleVisibility: .visible
-            ) {
-                Button("Abandon Challenge", role: .destructive) { retire() }
-                Button("Cancel", role: .cancel) {}
-            }
-        }
-    }
-
-    private func start(_ kind: ExpertChallengeKind) {
-        do {
-            _ = try CharacterProgressionService.startExpertChallenge(
-                skill: skill,
-                kind: kind,
-                in: modelContext
-            )
-            Haptics.selection()
-            dismiss()
-        } catch {
-            saveError = error.localizedDescription
-        }
-    }
-
-    private func retire() {
-        guard let currentChallenge else { return }
-        do {
-            try CharacterProgressionService.retireExpertChallenge(
-                currentChallenge,
-                in: modelContext
-            )
-            Haptics.selection()
-            dismiss()
-        } catch {
-            saveError = error.localizedDescription
-        }
-    }
-}
-
-private struct LegacyEditorView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-
-    let skill: LifeSkill
-    let existingLegacy: SkillLegacy?
-
-    @State private var masterTitle: String
-    @State private var crestSymbolName: String
-    @State private var saveError: String?
-
-    private let crestOptions = [
-        "crown.fill", "seal.fill", "shield.fill", "star.circle.fill",
-        "laurel.leading", "sparkles", "flame.fill", "diamond.fill"
-    ]
-
-    init(skill: LifeSkill, existingLegacy: SkillLegacy?) {
-        self.skill = skill
-        self.existingLegacy = existingLegacy
-        _masterTitle = State(
-            initialValue: existingLegacy?.masterTitle ?? "Master of \(skill.name)"
-        )
-        _crestSymbolName = State(
-            initialValue: existingLegacy?.crestSymbolName ?? "crown.fill"
-        )
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section("Legacy Preview") {
-                    VStack(spacing: 12) {
-                        Image(systemName: crestSymbolName)
-                            .font(.system(size: 42))
-                            .foregroundStyle(SkillingTimeTheme.gold)
-                        Text(masterTitle.isEmpty ? "Master Title" : masterTitle)
-                            .font(.system(.title2, design: .serif, weight: .bold))
-                        Text(skill.name)
-                            .font(.caption.weight(.semibold))
-                            .foregroundStyle(.secondary)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 10)
-                }
-
-                Section("Master Title") {
-                    TextField("Master of \(skill.name)", text: $masterTitle)
-                        .textInputAutocapitalization(.words)
-                }
-
-                Section("Master Crest") {
-                    LazyVGrid(
-                        columns: Array(repeating: GridItem(.flexible()), count: 4),
-                        spacing: 14
-                    ) {
-                        ForEach(crestOptions, id: \.self) { symbol in
-                            Button {
-                                crestSymbolName = symbol
-                                Haptics.selection()
-                            } label: {
-                                Image(systemName: symbol)
-                                    .font(.title2)
-                                    .frame(width: 48, height: 48)
-                                    .background(
-                                        crestSymbolName == symbol
-                                            ? SkillingTimeTheme.gold.opacity(0.18)
-                                            : Color.clear,
-                                        in: RoundedRectangle(cornerRadius: 12)
-                                    )
-                            }
-                            .buttonStyle(.plain)
-                            .accessibilityLabel(SymbolNames.label(for: symbol))
-                            .accessibilityAddTraits(
-                                crestSymbolName == symbol ? .isSelected : []
-                            )
-                        }
-                    }
-                    .padding(.vertical, 4)
-                }
-
-                Section {
-                    Text("Legacy is identity only. It never changes XP, Quest targets, or progression speed.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                if let saveError {
-                    Section("Could Not Save") {
-                        Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
-                }
-            }
-            .navigationTitle("Master Legacy")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(
-                            masterTitle.trimmingCharacters(in: .whitespacesAndNewlines).isEmpty
-                        )
-                }
-            }
-        }
-    }
-
-    private func save() {
-        do {
-            try CharacterProgressionService.saveLegacy(
-                skill: skill,
-                masterTitle: masterTitle,
-                crestSymbolName: crestSymbolName,
-                in: modelContext
-            )
-            Haptics.levelUp(major: true)
-            dismiss()
-        } catch {
-            saveError = error.localizedDescription
-        }
     }
 }
 
@@ -879,255 +397,6 @@ private struct SessionHistoryRow: View {
         .contentShape(Rectangle())
         .accessibilityElement(children: .combine)
         .accessibilityHint("Opens session details and correction controls")
-    }
-}
-
-private enum FocusGoalChoice: String, CaseIterable, Identifiable {
-    case noGoal
-    case thirtyMinutes
-    case sevenHundredFiftyXP
-    case nextThreshold
-
-    var id: String { rawValue }
-
-    var title: String {
-        switch self {
-        case .noGoal: "No goal"
-        case .thirtyMinutes: "Practice for 30 minutes"
-        case .sevenHundredFiftyXP: "Earn 750 XP"
-        case .nextThreshold: "Reach the next progression threshold"
-        }
-    }
-
-    var systemImage: String {
-        switch self {
-        case .noGoal: "circle"
-        case .thirtyMinutes: "timer"
-        case .sevenHundredFiftyXP: "sparkles"
-        case .nextThreshold: "chevron.up.2"
-        }
-    }
-}
-
-private struct FocusGoalPickerView: View {
-    @Environment(\.dismiss) private var dismiss
-
-    let skill: LifeSkill
-    let progress: ProgressSnapshot
-    let onStart: (SessionFocusGoal?) -> Void
-
-    @State private var selection = FocusGoalChoice.thirtyMinutes
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    Label(
-                        "Focus Goals were earned when \(skill.name) reached Apprentice at Level 25.",
-                        systemImage: "seal.fill"
-                    )
-                    .foregroundStyle(Color(hex: skill.accentHex))
-                }
-
-                Section("Session Goal") {
-                    ForEach(FocusGoalChoice.allCases) { choice in
-                        Button {
-                            selection = choice
-                            Haptics.selection()
-                        } label: {
-                            HStack {
-                                Label(choice.title, systemImage: choice.systemImage)
-                                    .foregroundStyle(.primary)
-                                Spacer()
-                                if selection == choice {
-                                    Image(systemName: "checkmark.circle.fill")
-                                        .foregroundStyle(Color(hex: skill.accentHex))
-                                }
-                            }
-                        }
-                    }
-                }
-
-                Section {
-                    Text("Focus Goals do not change XP. They provide a clear destination for this session and remain nonpunitive if unfinished.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-            }
-            .navigationTitle("Begin \(skill.name)")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Start") {
-                        onStart(makeGoal())
-                    }
-                }
-            }
-        }
-    }
-
-    private func makeGoal() -> SessionFocusGoal? {
-        switch selection {
-        case .noGoal:
-            nil
-        case .thirtyMinutes:
-            .duration(seconds: 30 * 60, startingTotalXP: progress.totalXP)
-        case .sevenHundredFiftyXP:
-            .xp(amount: 750, startingTotalXP: progress.totalXP)
-        case .nextThreshold:
-            .progression(
-                targetTotalXP: ProgressionEngine.nextThresholdXP(
-                    after: progress,
-                    curveVersion: skill.progressionCurveVersion
-                ),
-                startingTotalXP: progress.totalXP
-            )
-        }
-    }
-}
-
-private struct SpecializationEditorView: View {
-    @Environment(\.dismiss) private var dismiss
-    @Environment(\.modelContext) private var modelContext
-
-    let skill: LifeSkill
-    let existingSpecialization: SkillSpecialization?
-
-    @State private var title: String
-    @State private var saveError: String?
-
-    init(
-        skill: LifeSkill,
-        existingSpecialization: SkillSpecialization?
-    ) {
-        self.skill = skill
-        self.existingSpecialization = existingSpecialization
-        _title = State(initialValue: existingSpecialization?.title ?? "")
-    }
-
-    private var trimmedTitle: String {
-        title.trimmingCharacters(in: .whitespacesAndNewlines)
-    }
-
-    private var suggestions: [String] {
-        let identity = "\(skill.name) \(skill.category)".lowercased()
-        if identity.contains("cook") {
-            return ["Home Cook", "Bread Maker", "Meal Prepper", "Pitmaster"]
-        }
-        if identity.contains("read") || identity.contains("learn") {
-            return ["Bookkeeper", "Researcher", "Lifelong Learner", "Scholar"]
-        }
-        if identity.contains("exercise") || identity.contains("fitness") {
-            return ["Endurance Builder", "Strength Seeker", "Daily Mover", "Athlete"]
-        }
-        return ["Practitioner", "Craftsperson", "Specialist", "Dedicated Hand"]
-    }
-
-    var body: some View {
-        NavigationStack {
-            Form {
-                Section {
-                    VStack(spacing: 8) {
-                        SkillGlyph(
-                            symbolName: skill.symbolName,
-                            color: Color(hex: skill.accentHex),
-                            size: 62,
-                            rank: .journeyman
-                        )
-                        Text(skill.name)
-                            .font(.headline)
-                        Text(trimmedTitle.isEmpty ? "Journeyman" : "Journeyman · \(trimmedTitle)")
-                            .font(.subheadline)
-                            .foregroundStyle(SkillingTimeTheme.gold)
-                    }
-                    .frame(maxWidth: .infinity)
-                    .padding(.vertical, 8)
-                }
-
-                Section("Custom Title") {
-                    TextField("Specialization", text: $title)
-                        .textInputAutocapitalization(.words)
-                        .onChange(of: title) { _, newValue in
-                            if newValue.count > 40 {
-                                title = String(newValue.prefix(40))
-                            }
-                        }
-                    Text("Identity only. Specializations never change XP or Quest rewards.")
-                        .font(.caption)
-                        .foregroundStyle(.secondary)
-                }
-
-                Section("Suggestions") {
-                    ForEach(suggestions, id: \.self) { suggestion in
-                        Button(suggestion) {
-                            title = suggestion
-                            Haptics.selection()
-                        }
-                    }
-                }
-
-                if let saveError {
-                    Section("Not Saved") {
-                        Label(saveError, systemImage: "exclamationmark.triangle.fill")
-                            .foregroundStyle(.red)
-                    }
-                }
-
-                if existingSpecialization != nil {
-                    Section {
-                        Button("Remove Specialization", role: .destructive) {
-                            removeSpecialization()
-                        }
-                    }
-                }
-            }
-            .navigationTitle("Specialization")
-            .navigationBarTitleDisplayMode(.inline)
-            .toolbar {
-                ToolbarItem(placement: .cancellationAction) {
-                    Button("Cancel") { dismiss() }
-                }
-                ToolbarItem(placement: .confirmationAction) {
-                    Button("Save") { save() }
-                        .disabled(trimmedTitle.isEmpty)
-                }
-            }
-        }
-    }
-
-    private func save() {
-        if let existingSpecialization {
-            existingSpecialization.title = trimmedTitle
-            existingSpecialization.chosenAt = .now
-        } else {
-            modelContext.insert(
-                SkillSpecialization(skillID: skill.id, title: trimmedTitle)
-            )
-        }
-
-        do {
-            try modelContext.save()
-            Haptics.sessionComplete()
-            dismiss()
-        } catch {
-            modelContext.rollback()
-            saveError = error.localizedDescription
-        }
-    }
-
-    private func removeSpecialization() {
-        guard let existingSpecialization else { return }
-        modelContext.delete(existingSpecialization)
-        do {
-            try modelContext.save()
-            dismiss()
-        } catch {
-            modelContext.rollback()
-            saveError = error.localizedDescription
-        }
     }
 }
 
@@ -1208,7 +477,6 @@ private struct ManualSessionView: View {
             startedAt: date.addingTimeInterval(TimeInterval(-durationSeconds)),
             endedAt: date,
             activeSeconds: durationSeconds,
-            focusGoal: nil,
             shouldResumeOnCancel: false
         )
 

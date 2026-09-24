@@ -27,11 +27,8 @@ struct RootTabView: View {
     @EnvironmentObject private var notificationManager: ProgressionNotificationManager
     @Query(sort: \LifeSkill.sortOrder) private var skills: [LifeSkill]
     @Query private var ledgers: [SkillLedger]
-    @Query(sort: \QuestAssignment.periodStart, order: .reverse)
-    private var questAssignments: [QuestAssignment]
 
     @StateObject private var presenter = ActiveSessionPresenter()
-    @State private var selectedTab = AppFeatures.todayTab ? 0 : 1
     @State private var persistenceError: String?
     @State private var ambientSyncTask: Task<Void, Never>?
 
@@ -45,34 +42,21 @@ struct RootTabView: View {
         return ledgers.first { $0.skillID == skillID }?.totalActiveSeconds ?? 0
     }
 
-    private var activeQuestAssignment: QuestAssignment? {
-        guard AppFeatures.quests,
-              let skillID = sessionController.activeSession?.skillID else { return nil }
-        return questAssignments
-            .filter {
-                QuestEngine.isCurrent($0)
-                    && $0.completedAt == nil
-                    && ($0.targetSkillID == nil || $0.targetSkillID == skillID)
-                    && isLiveQuest($0)
-            }
-            .sorted {
-                let lhsPriority = questLivePriority($0)
-                let rhsPriority = questLivePriority($1)
-                if lhsPriority != rhsPriority { return lhsPriority < rhsPriority }
-                return $0.slot < $1.slot
-            }
-            .first
-    }
-
     var body: some View {
-        Group {
-            if #available(iOS 26.1, *) {
-                toggleableNativeAccessoryTabs
-            } else if #available(iOS 26.0, *) {
-                nativeAccessoryTabs
-            } else {
-                fallbackAccessoryTabs
-            }
+        // One screen: the Skillbook. A running session floats above it.
+        NavigationStack {
+            SkillbookView()
+        }
+        .tint(SkillingTimeTheme.gold)
+        .safeAreaInset(edge: .bottom, spacing: 0) {
+            sessionAccessory
+                .padding(.horizontal, 12)
+                .padding(.bottom, 4)
+                .transition(
+                    reduceMotion
+                        ? .opacity
+                        : .move(edge: .bottom).combined(with: .opacity)
+                )
         }
         .animation(
             SkillingTimeMotion.animation(
@@ -83,9 +67,6 @@ struct RootTabView: View {
         )
         .fullScreenCover(item: $presenter.presentation) { presentation in
             ActiveSessionView(skillID: presentation.id)
-        }
-        .onChange(of: selectedTab) { _, _ in
-            Haptics.selection()
         }
         .onOpenURL(perform: handleDeepLink)
         .task {
@@ -109,16 +90,6 @@ struct RootTabView: View {
                 try ActivityDayLedgerService.rebuildIfNeeded(in: modelContext)
             } catch {
                 preparationFailures.append("Daily activity ledger: \(error.localizedDescription)")
-            }
-            do {
-                try CharacterProgressionService.prepare(in: modelContext)
-            } catch {
-                preparationFailures.append("Character Paths: \(error.localizedDescription)")
-            }
-            do {
-                _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
-            } catch {
-                preparationFailures.append("Questboard: \(error.localizedDescription)")
             }
             if !preparationFailures.isEmpty {
                 persistenceError = "Skilling Time could not fully prepare its persistent history. "
@@ -150,9 +121,6 @@ struct RootTabView: View {
             // Siri, Shortcuts, and the widgets hand start requests over here.
             startPendingSkillIfRequested()
         }
-        .onChange(of: questFingerprints) { _, _ in
-            synchronizeAmbientSessionSoon()
-        }
         .onChange(of: notificationManager.alertsEnabled) { _, _ in
             synchronizeAmbientSessionSoon()
         }
@@ -170,11 +138,6 @@ struct RootTabView: View {
             sessionController.refreshFromSharedStorage()
             clearRecoveredCommittedTimer()
             startPendingSkillIfRequested()
-            do {
-                _ = try QuestBoardService.prepareCurrentBoard(in: modelContext)
-            } catch {
-                persistenceError = "The Questboard could not refresh. \(error.localizedDescription)"
-            }
             synchronizeAmbientSessionSoon()
         }
         .onChange(of: sessionController.storageErrorMessage) { _, message in
@@ -200,96 +163,6 @@ struct RootTabView: View {
         }
         .environmentObject(presenter)
         .preferredColorScheme(.dark)
-    }
-
-    private var tabView: some View {
-        TabView(selection: $selectedTab) {
-            if AppFeatures.todayTab {
-                NavigationStack {
-                    TodayView()
-                }
-                .tabItem { Label("Today", systemImage: "sun.max.fill") }
-                .tag(0)
-            }
-
-            NavigationStack {
-                SkillbookView()
-            }
-            .tabItem { Label("Skills", systemImage: "square.grid.2x2.fill") }
-            .tag(1)
-
-            if AppFeatures.todayTab {
-                NavigationStack {
-                    ChronicleRootView()
-                }
-                .tabItem { Label("Chronicle", systemImage: "scroll.fill") }
-                .tag(2)
-            }
-
-            // In the simplified app, Chronicle milestones live inside "You".
-            NavigationStack {
-                CharacterView()
-            }
-            .tabItem {
-                Label(
-                    AppFeatures.todayTab ? "Character" : "You",
-                    systemImage: "person.crop.circle.fill"
-                )
-            }
-            .tag(3)
-        }
-        .tint(SkillingTimeTheme.gold)
-    }
-
-    @available(iOS 26.0, *)
-    private var nativeAccessoryTabs: some View {
-        tabView
-            .tabBarMinimizeBehavior(.onScrollDown)
-            .tabViewBottomAccessory {
-                nativeSessionAccessory
-                    .padding(.horizontal, 8)
-            }
-    }
-
-    @available(iOS 26.1, *)
-    private var toggleableNativeAccessoryTabs: some View {
-        tabView
-            .tabBarMinimizeBehavior(.onScrollDown)
-            .tabViewBottomAccessory(
-                isEnabled: sessionController.activeSession != nil
-            ) {
-                nativeSessionAccessory
-                    .padding(.horizontal, 8)
-            }
-    }
-
-    @available(iOS 26.0, *)
-    @ViewBuilder
-    private var nativeSessionAccessory: some View {
-        if let snapshot = sessionController.activeSession,
-           let skill = activeSkill {
-            NativeSessionAccessory(
-                skill: skill,
-                snapshot: snapshot,
-                baseTotalSeconds: activeBaseSeconds
-            ) {
-                openActiveSession(skillID: skill.id)
-            }
-        }
-    }
-
-    private var fallbackAccessoryTabs: some View {
-        ZStack(alignment: .bottom) {
-            tabView
-            sessionAccessory
-                .padding(.horizontal, 12)
-                .padding(.bottom, 54)
-                .transition(
-                    reduceMotion
-                        ? .opacity
-                        : .move(edge: .bottom).combined(with: .opacity)
-                )
-        }
     }
 
     @ViewBuilder
@@ -329,19 +202,6 @@ struct RootTabView: View {
         }
     }
 
-    private var questFingerprints: [QuestFingerprint] {
-        questAssignments.map {
-            QuestFingerprint(
-                id: $0.id,
-                currentValue: $0.currentValue,
-                targetValue: $0.targetValue,
-                completedAt: $0.completedAt,
-                retiredAt: $0.retiredAt
-            )
-        }
-        .sorted { $0.id < $1.id }
-    }
-
     private func openActiveSession(skillID: UUID) {
         presenter.present(skillID: skillID)
     }
@@ -359,7 +219,7 @@ struct RootTabView: View {
             return
         }
         guard let skill = skills.first(where: { $0.id == skillID && !$0.isArchived }),
-              sessionController.start(skillID: skill.id, focusGoal: nil) else { return }
+              sessionController.start(skillID: skill.id) else { return }
         Haptics.sessionStart()
         openActiveSession(skillID: skill.id)
     }
@@ -455,34 +315,13 @@ struct RootTabView: View {
         await liveActivityCoordinator.synchronize(
             snapshot: snapshot,
             skill: skill,
-            baseTotalSeconds: baseSeconds,
-            questAssignment: activeQuestAssignment
+            baseTotalSeconds: baseSeconds
         )
         await notificationManager.synchronize(
             snapshot: snapshot,
             skill: skill,
             baseTotalSeconds: baseSeconds
         )
-    }
-
-    private func questLivePriority(_ assignment: QuestAssignment) -> Int {
-        switch assignment.kind {
-        case .some(.focusGoal): 0
-        case .some(.deepSession): 1
-        case .some(.activeTime): 2
-        case .some(.journeymanXP): 3
-        default: 10
-        }
-    }
-
-    private func isLiveQuest(_ assignment: QuestAssignment) -> Bool {
-        guard let kind = assignment.kind else { return false }
-        return [
-            QuestKind.focusGoal,
-            .deepSession,
-            .activeTime,
-            .journeymanXP
-        ].contains(kind)
     }
 
     private func seedBuiltInSkillsIfNeeded() throws {
@@ -519,14 +358,6 @@ private struct SkillFingerprint: Equatable {
     let symbolName: String
     let accentHex: String
     let curveVersion: Int
-}
-
-private struct QuestFingerprint: Equatable {
-    let id: String
-    let currentValue: Int
-    let targetValue: Int
-    let completedAt: Date?
-    let retiredAt: Date?
 }
 
 private struct MiniSessionBar: View {
@@ -609,55 +440,6 @@ private struct MiniSessionBar: View {
             .accessibilityValue(
                 "\(DurationText.compact(seconds)), \(snapshot.isPaused ? "paused" : "running")"
             )
-            .accessibilityHint("Opens the active session")
-        }
-    }
-}
-
-@available(iOS 26.0, *)
-private struct NativeSessionAccessory: View {
-    @Environment(\.tabViewBottomAccessoryPlacement) private var placement
-
-    let skill: LifeSkill
-    let snapshot: ActiveSessionSnapshot
-    let baseTotalSeconds: Int
-    let action: () -> Void
-
-    var body: some View {
-        if placement == .inline {
-            compactAccessory
-        } else {
-            MiniSessionBar(
-                skill: skill,
-                snapshot: snapshot,
-                baseTotalSeconds: baseTotalSeconds,
-                usesOwnBackground: false,
-                action: action
-            )
-        }
-    }
-
-    private var compactAccessory: some View {
-        TimelineView(.periodic(from: .now, by: 1)) { context in
-            let seconds = snapshot.elapsedSeconds(at: context.date)
-            Button(action: action) {
-                HStack(spacing: 8) {
-                    Image(systemName: skill.symbolName)
-                        .foregroundStyle(Color(hex: skill.accentHex))
-                    Text(skill.name)
-                        .font(.caption.weight(.semibold))
-                        .lineLimit(1)
-                    Spacer(minLength: 4)
-                    Text(snapshot.isAwaitingCommit
-                        ? "Review"
-                        : snapshot.isPaused ? "Paused" : DurationText.timer(seconds))
-                        .font(.system(.caption, design: .monospaced, weight: .semibold))
-                        .contentTransition(.numericText())
-                }
-                .contentShape(Rectangle())
-            }
-            .buttonStyle(SkillingTimePressStyle())
-            .accessibilityLabel("Active \(skill.name) session")
             .accessibilityHint("Opens the active session")
         }
     }

@@ -60,6 +60,8 @@ enum DurationText {
     }
 }
 
+// Focus Goals were retired from the app. These types remain only because stored
+// sessions keep their historical goal fields (see SkillSession).
 enum SessionFocusGoalKind: String, Codable, CaseIterable, Sendable {
     case duration
     case xp
@@ -88,70 +90,6 @@ struct SessionFocusGoal: Codable, Equatable, Sendable {
     }
 }
 
-struct FocusGoalProgress: Equatable, Sendable {
-    let title: String
-    let currentValue: Int
-    let targetValue: Int
-    let progressLabel: String
-    let fractionComplete: Double
-    let isComplete: Bool
-
-    static func evaluate(
-        goal: SessionFocusGoal,
-        sessionSeconds: Int,
-        liveTotalXP: Int
-    ) -> FocusGoalProgress {
-        let current: Int
-        let target: Int
-        let title: String
-        let label: String
-
-        switch goal.kind {
-        case .duration:
-            current = max(0, sessionSeconds)
-            target = goal.targetValue
-            title = "Practice for \(DurationText.compact(target))"
-            label = "\(DurationText.compact(min(current, target))) of \(DurationText.compact(target))"
-        case .xp:
-            current = max(0, liveTotalXP - goal.startingTotalXP)
-            target = goal.targetValue
-            title = "Earn \(target.formatted()) XP"
-            label = "\(min(current, target).formatted()) of \(target.formatted()) XP"
-        case .progression:
-            current = max(0, liveTotalXP - goal.startingTotalXP)
-            target = max(1, goal.targetValue - goal.startingTotalXP)
-            title = "Reach the next progression threshold"
-            label = "\(min(current, target).formatted()) of \(target.formatted()) XP"
-        }
-
-        let fraction = min(max(Double(current) / Double(max(1, target)), 0), 1)
-        return FocusGoalProgress(
-            title: title,
-            currentValue: current,
-            targetValue: target,
-            progressLabel: label,
-            fractionComplete: fraction,
-            isComplete: current >= target
-        )
-    }
-}
-
-/// Codable mirror used by the Live Activity intent without importing the app target.
-struct SharedSessionFocusGoalPayload: Codable, Equatable, Sendable {
-    let kind: String
-    let targetValue: Int
-    let startingTotalXP: Int
-
-    var goal: SessionFocusGoal? {
-        guard let kind = SessionFocusGoalKind(rawValue: kind) else { return nil }
-        return SessionFocusGoal(
-            kind: kind,
-            targetValue: targetValue,
-            startingTotalXP: startingTotalXP
-        )
-    }
-}
-
 /// Its coding keys intentionally match `ActiveSessionSnapshot` exactly.
 struct SharedActiveSessionPayload: Codable, Equatable, Sendable {
     let id: UUID
@@ -161,7 +99,6 @@ struct SharedActiveSessionPayload: Codable, Equatable, Sendable {
     var activeSegmentStartedAt: Date?
     var finishRequestedAt: Date?
     var shouldResumeAfterCancelledFinish: Bool?
-    var focusGoal: SharedSessionFocusGoalPayload?
 
     var isPaused: Bool { activeSegmentStartedAt == nil }
     var isAwaitingCommit: Bool { finishRequestedAt != nil }

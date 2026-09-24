@@ -10,7 +10,6 @@ final class LiveActivityCoordinator: ObservableObject {
         snapshot: ActiveSessionSnapshot?,
         skill: LifeSkill?,
         baseTotalSeconds: Int,
-        questAssignment: QuestAssignment? = nil,
         at date: Date = .now
     ) async {
         guard let snapshot, let skill, snapshot.skillID == skill.id else {
@@ -27,7 +26,6 @@ final class LiveActivityCoordinator: ObservableObject {
             snapshot: snapshot,
             skill: skill,
             baseTotalSeconds: baseTotalSeconds,
-            questAssignment: questAssignment,
             at: date
         )
         let content = ActivityContent(state: state, staleDate: nil)
@@ -91,7 +89,6 @@ final class LiveActivityCoordinator: ObservableObject {
         snapshot: ActiveSessionSnapshot,
         skill: LifeSkill,
         baseTotalSeconds: Int,
-        questAssignment: QuestAssignment?,
         at date: Date
     ) -> SkillingTimeActivityAttributes.ContentState {
         let sessionSeconds = snapshot.elapsedSeconds(at: date)
@@ -107,21 +104,6 @@ final class LiveActivityCoordinator: ObservableObject {
             forTotalXP: liveXP,
             curveVersion: skill.progressionCurveVersion
         )
-        let goal = snapshot.focusGoal.map {
-            FocusGoalProgress.evaluate(
-                goal: $0,
-                sessionSeconds: sessionSeconds,
-                liveTotalXP: liveXP
-            )
-        }
-        let quest = QuestEngine.liveStatus(
-            assignment: questAssignment,
-            snapshot: snapshot,
-            skill: skill,
-            baseTotalSeconds: baseTotalSeconds,
-            at: date
-        )
-
         return SkillingTimeActivityAttributes.ContentState(
             accumulatedActiveSeconds: snapshot.accumulatedActiveSeconds,
             activeSegmentStartedAt: snapshot.activeSegmentStartedAt,
@@ -131,15 +113,6 @@ final class LiveActivityCoordinator: ObservableObject {
             xpEarned: max(0, liveXP - startingXP),
             xpRemaining: progress.xpRemaining,
             progressFraction: progress.fractionComplete,
-            focusGoalTitle: goal?.title,
-            focusGoalProgressLabel: goal?.progressLabel,
-            focusGoalFraction: goal?.fractionComplete,
-            questTitle: quest?.title,
-            questProgressLabel: quest?.progressLabel,
-            questFraction: quest?.fractionComplete,
-            questTimerStart: quest?.timerStart,
-            questTimerEnd: quest?.timerEnd,
-            questIsComplete: quest?.isComplete,
             isPaused: snapshot.isPaused,
             isAwaitingCommit: snapshot.isAwaitingCommit
         )
